@@ -32,7 +32,7 @@ class Sounds(ctx: Context) {
 
     private fun play(pick: (Triple<Int, Int, Int>) -> Int) {
         if (palette == "off") return
-        val ids = palettes[palette] ?: palettes.getValue(Config.SOUND_PALETTE)
+        val ids = palettes[palette] ?: return
         val v = Config.SOUND_VOLUME * (if (quiet) 0.4f else 1f)
         pool.play(pick(ids), v, v, 0, 0, 1f)
     }

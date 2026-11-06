@@ -1,0 +1,52 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build
+  cancel-in-progress: true
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.9"
+
+      - name: Compilar
+        id: build
+        shell: bash
+        run: |
+          set -o pipefail
+          gradle assembleRelease --no-daemon --stacktrace 2>&1 | tee build.log
+
+      # El APK (y el log si falla) se publican en la rama "build" para poder bajarlos con git.
+      - name: Publicar en la rama build
+        if: always()
+        shell: bash
+        run: |
+          mkdir out
+          tail -n 400 build.log > out/build.log || true
+          cp app/build/outputs/apk/release/app-release.apk out/glass.apk 2>/dev/null || true
+          echo "${{ steps.build.outcome }} ${{ github.sha }} run ${{ github.run_number }}" > out/STATUS
+          cd out
+          git init -q -b build
+          git config user.name "build-bot"
+          git config user.email "build-bot@users.noreply.github.com"
+          git add -A
+          git commit -qm "Build ${{ github.run_number }} (${{ steps.build.outcome }})"
+          git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" build

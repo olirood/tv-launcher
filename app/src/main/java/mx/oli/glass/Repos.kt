@@ -87,7 +87,8 @@ object AppRepo {
 
 // ---------- Entradas HDMI ----------
 
-data class InputEntry(val id: String, val name: String, val port: String)
+/** [active]: la tele reporta algo conectado (o un aparato se anunció por T-Link). */
+data class InputEntry(val id: String, val name: String, val port: String, val active: Boolean)
 
 object InputRepo {
     fun load(ctx: Context): List<InputEntry> {
@@ -99,7 +100,8 @@ object InputRepo {
             val custom = info.loadCustomLabel(ctx)?.toString()?.takeIf { it.isNotBlank() }
             // Un aparato con HDMI-CEC (T-Link) aparece como entrada "hija" con su propio nombre.
             val cec = list.firstOrNull { it.parentId == info.id }?.loadLabel(ctx)?.toString()?.takeIf { it.isNotBlank() }
-            InputEntry(info.id, custom ?: cec ?: port, port)
+            val state = runCatching { tim.getInputState(info.id) }.getOrDefault(TvInputManager.INPUT_STATE_DISCONNECTED)
+            InputEntry(info.id, custom ?: cec ?: port, port, active = cec != null || state == TvInputManager.INPUT_STATE_CONNECTED)
         }.sortedBy { it.port }
     }
 

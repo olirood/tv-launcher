@@ -16,12 +16,12 @@ object Config {
     )
 
     /** Clima (Open-Meteo, sin llave). */
-    const val CITY = "Ciudad de México"
-    const val LAT = 19.4326
-    const val LON = -99.1332
-    const val TIMEZONE = "America/Mexico_City"
+    const val CITY = "Culiacán"
+    const val LAT = 24.8091
+    const val LON = -107.3940
+    const val TIMEZONE = "America/Mazatlan"
 
-    /** Paleta de sonidos: "vidrio", "madera" o "minimo". */
+    /** Paleta de sonidos inicial: "vidrio", "madera", "minimo" o "off". Se cambia en el centro de control. */
     const val SOUND_PALETTE = "vidrio"
     const val SOUND_VOLUME = 0.7f
 
@@ -32,6 +32,6 @@ object Config {
     const val NIGHT_START = 20
     const val NIGHT_END = 5
 
-    /** Movimiento lento del fondo. */
-    const val DRIFT = true
+    /** Movimiento lento del fondo. Apagado: imagen fija, nítida y mucho más fluida en esta tele. */
+    const val DRIFT = false
 }

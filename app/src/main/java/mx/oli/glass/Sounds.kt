@@ -16,25 +16,41 @@ class Sounds(ctx: Context) {
         )
         .build()
 
-    private val ids: Triple<Int, Int, Int> = when (Config.SOUND_PALETTE) {
-        "madera" -> Triple(R.raw.madera_mover, R.raw.madera_elegir, R.raw.madera_atras)
-        "minimo" -> Triple(R.raw.minimo_mover, R.raw.minimo_elegir, R.raw.minimo_atras)
-        else -> Triple(R.raw.vidrio_mover, R.raw.vidrio_elegir, R.raw.vidrio_atras)
+    private val palettes: Map<String, Triple<Int, Int, Int>> = mapOf(
+        "vidrio" to Triple(R.raw.vidrio_mover, R.raw.vidrio_elegir, R.raw.vidrio_atras),
+        "madera" to Triple(R.raw.madera_mover, R.raw.madera_elegir, R.raw.madera_atras),
+        "minimo" to Triple(R.raw.minimo_mover, R.raw.minimo_elegir, R.raw.minimo_atras),
+    ).mapValues { (_, r) ->
+        Triple(pool.load(ctx, r.first, 1), pool.load(ctx, r.second, 1), pool.load(ctx, r.third, 1))
     }
-    private val move = pool.load(ctx, ids.first, 1)
-    private val select = pool.load(ctx, ids.second, 1)
-    private val back = pool.load(ctx, ids.third, 1)
+
+    /** "vidrio", "madera", "minimo" u "off". */
+    var palette = Config.SOUND_PALETTE
 
     /** En modo noche todo suena más bajo. */
     var quiet = false
 
-    private fun play(id: Int) {
+    private fun play(pick: (Triple<Int, Int, Int>) -> Int) {
+        val ids = palettes[palette] ?: return
         val v = Config.SOUND_VOLUME * (if (quiet) 0.4f else 1f)
-        pool.play(id, v, v, 0, 0, 1f)
+        pool.play(pick(ids), v, v, 0, 0, 1f)
     }
 
-    fun move() = play(move)
-    fun select() = play(select)
-    fun back() = play(back)
+    fun move() = play { it.first }
+    fun select() = play { it.second }
+    fun back() = play { it.third }
     fun release() = pool.release()
+}
+
+/** Preferencias que cambias desde el centro de control. */
+class Prefs(ctx: Context) {
+    private val sp = ctx.getSharedPreferences("glass", Context.MODE_PRIVATE)
+
+    var night: String
+        get() = sp.getString("night", "auto") ?: "auto"
+        set(v) = sp.edit().putString("night", v).apply()
+
+    var sound: String
+        get() = sp.getString("sound", Config.SOUND_PALETTE) ?: Config.SOUND_PALETTE
+        set(v) = sp.edit().putString("sound", v).apply()
 }

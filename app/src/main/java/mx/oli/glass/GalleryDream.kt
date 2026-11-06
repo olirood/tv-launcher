@@ -54,7 +54,7 @@ class GalleryDream : DreamService() {
                 setShadowLayer(20f, 0f, 3f, 0x66000000)
             })
             addView(TextView(context).apply {
-                text = "${art.artist} · ${art.year} · ${art.series}"
+                text = "${art.artist} · ${art.year}"
                 setTextColor(0xD9FFFFFF.toInt())
                 textSize = 21f * dp / resources.displayMetrics.scaledDensity
             })

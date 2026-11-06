@@ -64,8 +64,7 @@ object ArtCatalog {
         Artwork("dia-3-ejiri", Moment.DIA, "Ejiri, provincia de Suruga", HOK, "c. 1830–1832", S36,
             0xFFB7CFD8, 0xFFE7E1CF, 0xFF8C9A6A, 0xFF4F5B3B, 0xFFE4E6D4, 0xFFC6D79A),
 
-        Artwork("atardecer-1-kameido", Moment.ATARDECER, "Jardín de ciruelos en Kameido", HIR, "1857", EDO,
-            0xFFA82D22, 0xFFE8875A, 0xFF3D5C3B, 0xFF22301F, 0xFFFAD4C0, 0xFFF4A184),
+        // "Jardín de ciruelos en Kameido" queda fuera hasta conseguir la imagen.
         Artwork("atardecer-2-seta", Moment.ATARDECER, "Atardecer en Seta", HIR, "c. 1834", "Ocho vistas de Ōmi",
             0xFFD9653B, 0xFFF2C38A, 0xFF355F7A, 0xFF1D3446, 0xFFF8DCC4, 0xFFF7B47E),
         Artwork("atardecer-3-ohashi", Moment.ATARDECER, "Aguacero sobre el puente Ōhashi y Atake", HIR, "1857", EDO,

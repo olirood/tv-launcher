@@ -49,7 +49,8 @@ class Backdrop(val progress: State<Float>) {
 val LocalBackdrop = staticCompositionLocalOf<Backdrop> { error("Backdrop no disponible") }
 
 private fun DrawScope.drawCover(img: ImageBitmap, screen: Size, k: Float, origin: Offset) {
-    val s = max(screen.width / img.width, screen.height / img.height) * (1.04f + 0.06f * k)
+    // Sin movimiento la escala es exacta (1:1 cuando la imagen mide lo mismo que la pantalla): máxima nitidez.
+    val s = max(screen.width / img.width, screen.height / img.height) * (if (Config.DRIFT) 1.04f + 0.06f * k else 1f)
     val w = img.width * s
     val h = img.height * s
     val left = (screen.width - w) / 2f - 0.015f * k * screen.width - origin.x
@@ -60,7 +61,7 @@ private fun DrawScope.drawCover(img: ImageBitmap, screen: Size, k: Float, origin
         srcSize = IntSize(img.width, img.height),
         dstOffset = IntOffset(left.roundToInt(), top.roundToInt()),
         dstSize = IntSize(w.roundToInt(), h.roundToInt()),
-        filterQuality = FilterQuality.Low,
+        filterQuality = FilterQuality.Medium,
     )
 }
 
@@ -89,17 +90,20 @@ fun Glass(
     modifier: Modifier = Modifier,
     shape: Shape = RoundedCornerShape(36.dp),
     strength: Float = 1f,
+    dim: Float = 0.18f,
+    /** false: sin obra detrás (para mosaicos que el banner cubre por completo; ahorra trabajo a la GPU). */
+    backdrop: Boolean = true,
     content: @Composable BoxScope.() -> Unit,
 ) {
     val b = LocalBackdrop.current
     var origin by remember { mutableStateOf(Offset.Zero) }
     Box(
         modifier
-            .onGloballyPositioned { origin = it.positionInRoot() }
+            .then(if (backdrop) Modifier.onGloballyPositioned { origin = it.positionInRoot() } else Modifier)
             .clip(shape)
             .drawBehind {
-                paintArt(b, blurred = true, origin = origin)
-                drawRect(Color.Black.copy(alpha = 0.18f))
+                if (backdrop) paintArt(b, blurred = true, origin = origin) else drawRect(Color(0x33FFFFFF))
+                drawRect(Color.Black.copy(alpha = dim))
                 drawRect(
                     Brush.verticalGradient(
                         listOf(b.tint.copy(alpha = 0.22f * strength), b.tint.copy(alpha = 0.06f * strength))

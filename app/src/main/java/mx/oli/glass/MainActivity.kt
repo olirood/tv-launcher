@@ -11,25 +11,29 @@ import androidx.activity.compose.setContent
 
 class MainActivity : ComponentActivity() {
 
-    private val state = HomeState()
+    private lateinit var prefs: Prefs
+    private lateinit var state: HomeState
     private lateinit var sounds: Sounds
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         window.decorView.isSoundEffectsEnabled = false
-        sounds = Sounds(this)
+        prefs = Prefs(this)
+        state = HomeState(prefs)
+        sounds = Sounds(this).apply { palette = prefs.sound }
 
         // En el inicio, "Atrás" solo cierra capas; nunca sale del launcher.
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
                 when {
                     state.switching != null -> { state.switching = null; sounds.back() }
-                    state.showAll -> { state.showAll = false; sounds.back() }
+                    state.showControl -> { state.showControl = false; sounds.back(); state.homeSignal++ }
+                    state.showAll -> { state.showAll = false; sounds.back(); state.homeSignal++ }
                 }
             }
         })
 
-        setContent { GlassApp(state, sounds, ::launch) }
+        setContent { GlassApp(state, sounds, prefs, ::launch) }
     }
 
     private fun launch(intent: Intent) {
@@ -44,6 +48,7 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         state.showAll = false
+        state.showControl = false
         state.gallery = false
         state.switching = null
         state.homeSignal++

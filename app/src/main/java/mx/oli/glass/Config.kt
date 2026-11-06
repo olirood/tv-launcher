@@ -21,9 +21,9 @@ object Config {
     const val LON = -107.3940
     const val TIMEZONE = "America/Mazatlan"
 
-    /** Paleta de sonidos inicial: "vidrio", "madera", "minimo" o "off". Se cambia en el centro de control. */
-    const val SOUND_PALETTE = "vidrio"
-    const val SOUND_VOLUME = 0.7f
+    /** Paleta de sonidos inicial: "seda", "aire", "cristal" u "off". Se cambia en el centro de control. */
+    const val SOUND_PALETTE = "seda"
+    const val SOUND_VOLUME = 0.6f
 
     /** Minutos sin tocar el control para entrar al modo galería. */
     const val GALLERY_IDLE_MS = 3 * 60 * 1000L

@@ -17,21 +17,22 @@ class Sounds(ctx: Context) {
         .build()
 
     private val palettes: Map<String, Triple<Int, Int, Int>> = mapOf(
-        "vidrio" to Triple(R.raw.vidrio_mover, R.raw.vidrio_elegir, R.raw.vidrio_atras),
-        "madera" to Triple(R.raw.madera_mover, R.raw.madera_elegir, R.raw.madera_atras),
-        "minimo" to Triple(R.raw.minimo_mover, R.raw.minimo_elegir, R.raw.minimo_atras),
+        "seda" to Triple(R.raw.seda_mover, R.raw.seda_elegir, R.raw.seda_atras),
+        "aire" to Triple(R.raw.aire_mover, R.raw.aire_elegir, R.raw.aire_atras),
+        "cristal" to Triple(R.raw.cristal_mover, R.raw.cristal_elegir, R.raw.cristal_atras),
     ).mapValues { (_, r) ->
         Triple(pool.load(ctx, r.first, 1), pool.load(ctx, r.second, 1), pool.load(ctx, r.third, 1))
     }
 
-    /** "vidrio", "madera", "minimo" u "off". */
+    /** "seda", "aire", "cristal" u "off". */
     var palette = Config.SOUND_PALETTE
 
     /** En modo noche todo suena más bajo. */
     var quiet = false
 
     private fun play(pick: (Triple<Int, Int, Int>) -> Int) {
-        val ids = palettes[palette] ?: return
+        if (palette == "off") return
+        val ids = palettes[palette] ?: palettes.getValue(Config.SOUND_PALETTE)
         val v = Config.SOUND_VOLUME * (if (quiet) 0.4f else 1f)
         pool.play(pick(ids), v, v, 0, 0, 1f)
     }

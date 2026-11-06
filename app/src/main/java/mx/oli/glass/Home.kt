@@ -694,7 +694,7 @@ private fun ControlCenter(state: HomeState, sounds: Sounds, prefs: Prefs, launch
 
                 Section("Sonidos") {
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        listOf("vidrio" to "Vidrio", "madera" to "Madera", "minimo" to "Suave", "off" to "Sin").forEach { (k, l) ->
+                        listOf("seda" to "Seda", "aire" to "Aire", "cristal" to "Cristal", "off" to "Sin").forEach { (k, l) ->
                             Chip(l, state.soundPalette == k, onFocusMove = onMove, modifier = Modifier.weight(1f)) {
                                 state.soundPalette = k
                                 prefs.sound = k

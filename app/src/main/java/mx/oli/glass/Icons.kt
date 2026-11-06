@@ -18,7 +18,7 @@ import kotlin.math.cos
 import kotlin.math.sin
 
 /** Íconos de trazo simples, dibujados en una cuadrícula de 24x24. */
-enum class Ico { SEARCH, SLIDERS, HDMI, GRID, SUN, MOON, CLOUD, RAIN }
+enum class Ico { SEARCH, SLIDERS, HDMI, GRID, SUN, MOON, CLOUD, RAIN, IMAGE, SPEAKER, BT, GEAR }
 
 @Composable
 fun Icon(kind: Ico, color: Color, size: Dp = 28.dp, modifier: Modifier = Modifier) {
@@ -66,6 +66,32 @@ fun Icon(kind: Ico, color: Color, size: Dp = 28.dp, modifier: Modifier = Modifie
                     close()
                 }
                 drawPath(path, color, style = st)
+            }
+            Ico.IMAGE -> {
+                drawRoundRect(color, p(3f, 4.5f), Size(18f * u, 15f * u), CornerRadius(2.5f * u), style = st)
+                line(3.5f, 17f, 9f, 11.5f); line(9f, 11.5f, 13f, 15.5f); line(12f, 14.5f, 15f, 11.5f); line(15f, 11.5f, 20.5f, 17f)
+                drawCircle(color, 1.6f * u, p(15.5f, 8.5f), style = st)
+            }
+            Ico.SPEAKER -> {
+                val path = Path().apply {
+                    moveTo(4f * u, 9.5f * u); lineTo(8f * u, 9.5f * u); lineTo(12.5f * u, 5.5f * u)
+                    lineTo(12.5f * u, 18.5f * u); lineTo(8f * u, 14.5f * u); lineTo(4f * u, 14.5f * u); close()
+                }
+                drawPath(path, color, style = st)
+                drawArc(color, -45f, 90f, false, p(12f, 8f), Size(6f * u, 8f * u), style = st)
+                drawArc(color, -50f, 100f, false, p(11f, 4.5f), Size(10f * u, 15f * u), style = st)
+            }
+            Ico.BT -> {
+                line(7f, 7.5f, 16.5f, 16f); line(16.5f, 16f, 12f, 20.5f); line(12f, 20.5f, 12f, 3.5f)
+                line(12f, 3.5f, 16.5f, 8f); line(16.5f, 8f, 7f, 16.5f)
+            }
+            Ico.GEAR -> {
+                drawCircle(color, 3.2f * u, p(12f, 12f), style = st)
+                for (i in 0 until 8) {
+                    val a = Math.toRadians(i * 45.0)
+                    line(12f + 6.2f * cos(a).toFloat(), 12f + 6.2f * sin(a).toFloat(), 12f + 9f * cos(a).toFloat(), 12f + 9f * sin(a).toFloat())
+                }
+                drawCircle(color, 6.2f * u, p(12f, 12f), style = st)
             }
             Ico.CLOUD, Ico.RAIN -> {
                 cloud(color, u, st)

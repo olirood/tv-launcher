@@ -6,7 +6,6 @@ import android.media.AudioManager
 import android.os.SystemClock
 import android.provider.Settings
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
@@ -18,8 +17,8 @@ import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -31,19 +30,16 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
@@ -73,6 +69,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
@@ -97,15 +94,29 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
 
+// Medidas del lienzo de diseño (1920x1080).
+private const val SIDE = 96f          // margen del dock
+private const val PAD = 28f           // relleno interior del dock
+private const val TILE_W = 249f
+private const val TILE_H = 140f
+private const val GAP = 36f
+private const val DOCK_H = TILE_H + 2 * 26f
+private const val DOCK_Y = 1080f - 70f - DOCK_H   // la primera fila de "todas las apps" asoma abajo
+private const val ROW_STEP = TILE_H + 44f
+private const val GRID_TOP = DOCK_Y + DOCK_H + 40f
+private const val PER_ROW = 6
+
 /** Estado de la pantalla de inicio (vive en la Activity, sobrevive recomposiciones). */
 class HomeState(prefs: Prefs) {
     var now by mutableStateOf(Calendar.getInstance())
     var dock by mutableStateOf<List<AppEntry>>(emptyList())
     var allApps by mutableStateOf<List<AppEntry>>(emptyList())
-    var showAll by mutableStateOf(false)
     var showControl by mutableStateOf(false)
     var inputs by mutableStateOf<List<InputEntry>>(emptyList())
     var weather by mutableStateOf<Weather?>(null)
+
+    /** Fila enfocada: 0 = dock, 1.. = filas de todas las apps. */
+    var row by mutableIntStateOf(0)
     var focusIndex by mutableIntStateOf(0)
     var gallery by mutableStateOf(false)
     var switching by mutableStateOf<InputEntry?>(null)
@@ -118,7 +129,7 @@ class HomeState(prefs: Prefs) {
     @Volatile var lastInput = SystemClock.uptimeMillis()
     @Volatile var resumed = false
 
-    val overlayOpen get() = showAll || showControl || switching != null
+    val overlayOpen get() = showControl || switching != null || row > 0
 
     val isNight: Boolean
         get() = when (nightMode) {
@@ -181,7 +192,10 @@ private fun Home(state: HomeState, sounds: Sounds, prefs: Prefs, launch: (Intent
     }
 
     LaunchedEffect(Unit) {
-        state.dock = withContext(Dispatchers.IO) { AppRepo.loadDock(ctx) }
+        val dock = withContext(Dispatchers.IO) { AppRepo.loadDock(ctx) }
+        state.dock = dock
+        val inDock = dock.map { it.pkg }.toSet()
+        state.allApps = withContext(Dispatchers.IO) { AppRepo.loadAll(ctx) }.filter { it.pkg !in inDock }
     }
     LaunchedEffect(state.homeSignal, state.resumed) {
         state.inputs = withContext(Dispatchers.IO) { InputRepo.load(ctx) }
@@ -205,14 +219,6 @@ private fun Home(state: HomeState, sounds: Sounds, prefs: Prefs, launch: (Intent
         }
     }
 
-    LaunchedEffect(state.showAll) {
-        if (state.showAll) {
-            if (state.allApps.isEmpty()) state.allApps = withContext(Dispatchers.IO) { AppRepo.loadAll(ctx) }
-        } else {
-            state.allApps = emptyList()
-        }
-    }
-
     LaunchedEffect(state.switching) {
         val target = state.switching ?: return@LaunchedEffect
         delay(650)
@@ -227,43 +233,49 @@ private fun Home(state: HomeState, sounds: Sounds, prefs: Prefs, launch: (Intent
     }
 
     val uiAlpha by animateFloatAsState(if (state.gallery) 0f else 1f, tween(700), label = "ui")
+    // Desplazamiento vertical: el dock sube y aparece la cuadrícula de todas las apps.
+    val scrollTarget = if (state.row == 0) 0f else -(DOCK_Y - 120f) - (state.row - 3).coerceAtLeast(0) * ROW_STEP
+    val scroll by animateFloatAsState(scrollTarget, spring(dampingRatio = 0.9f, stiffness = 260f), label = "scroll")
+    val gridDim by animateFloatAsState(if (state.row > 0) 1f else 0f, tween(320), label = "dim")
 
     Box(Modifier.fillMaxSize().onSizeChanged { b.screen = it.toSize() }) {
-        // Obra + velos + modo noche en una sola capa guardada: se pinta una vez, no en cada cuadro.
         val night = state.isNight
         Canvas(Modifier.fillMaxSize().graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }) {
             paintArt(b, blurred = false)
             val veil = 1f - 0.6f * (1f - uiAlpha)
+            // Velo suave arriba a la izquierda (para el nombre) y abajo (para el dock).
             drawRect(
-                Brush.horizontalGradient(0f to Color(0xA605080E), 0.42f to Color(0x4005080E), 0.7f to Color(0x0005080E)),
+                Brush.radialGradient(
+                    listOf(Color(0x9905080E), Color(0x0005080E)),
+                    center = Offset(0f, 0f),
+                    radius = size.width * 0.55f,
+                ),
                 alpha = veil,
             )
             drawRect(
-                Brush.verticalGradient(
-                    0f to Color(0x8005080E), 0.24f to Color(0x0005080E), 0.6f to Color(0x0005080E), 1f to Color(0x9905080E),
-                ),
+                Brush.verticalGradient(0.55f to Color(0x0005080E), 1f to Color(0xB305080E)),
                 alpha = veil,
             )
             if (night) drawRect(Color(0x5C080604))
         }
+        // Al bajar a la cuadrícula la obra se oscurece.
+        if (gridDim > 0f) Box(Modifier.fillMaxSize().graphicsLayer { alpha = gridDim }.background(Color(0xB3050608)))
 
         Box(Modifier.fillMaxSize().graphicsLayer { alpha = uiAlpha }) {
-            TopBar(state, sounds, launch, Modifier.align(Alignment.TopStart))
-            Hero(state, Modifier.align(Alignment.TopStart).padding(start = 120.dp, top = 270.dp))
-            ArtCredit(Modifier.align(Alignment.BottomEnd).padding(end = 128.dp, bottom = 286.dp))
-            Dock(state, sounds, launch, Modifier.align(Alignment.BottomStart))
+            Title(state, Modifier.align(Alignment.TopStart).padding(start = 120.dp, top = 96.dp).graphicsLayer { alpha = 1f - gridDim })
+            ArtCredit(Modifier.align(Alignment.TopStart).offset(x = 0.dp, y = (DOCK_Y - 64f).dp).fillMaxWidth()
+                .padding(end = 124.dp).graphicsLayer { alpha = 1f - gridDim })
+            TopRight(state, sounds, launch, Modifier.align(Alignment.TopEnd).padding(top = 56.dp, end = 96.dp))
+            Apps(state, sounds, launch, Modifier.graphicsLayer { translationY = scroll * density })
         }
 
         AnimatedVisibility(state.gallery, enter = fadeIn(tween(900)), exit = fadeOut(tween(400))) {
             GalleryOverlay(state)
         }
-        AnimatedVisibility(state.showAll, enter = fadeIn(tween(220)), exit = fadeOut(tween(180))) {
-            AllAppsOverlay(state, sounds, launch)
-        }
         AnimatedVisibility(
             state.showControl,
-            enter = fadeIn(tween(200)) + slideInHorizontally(tween(260)) { it / 6 },
-            exit = fadeOut(tween(160)) + slideOutHorizontally(tween(200)) { it / 6 },
+            enter = fadeIn(tween(180)) + scaleIn(tween(220), initialScale = 0.94f, transformOrigin = TransformOrigin(1f, 0f)),
+            exit = fadeOut(tween(140)) + scaleOut(tween(160), targetScale = 0.96f, transformOrigin = TransformOrigin(1f, 0f)),
         ) {
             ControlCenter(state, sounds, prefs, launch)
         }
@@ -295,7 +307,7 @@ fun Txt(
             fontWeight = weight,
             fontFamily = family,
             letterSpacing = spacing,
-            shadow = if (shadow) Shadow(Color(0x73000000), Offset(0f, 3f), 18f) else null,
+            shadow = if (shadow) Shadow(Color(0x80000000), Offset(0f, 3f), 22f) else null,
         ),
     )
 }
@@ -310,116 +322,15 @@ private fun Seal(text: String, size: Dp) {
     }
 }
 
-private fun timeText(c: Calendar) = SimpleDateFormat("h:mm", ES).format(c.time)
-private fun dateText(c: Calendar) = SimpleDateFormat("EEEE d 'de' MMMM", ES).format(c.time)
-    .replaceFirstChar { it.titlecase(ES) }
+private fun timeText(c: Calendar) = SimpleDateFormat("h:mm a", ES).format(c.time)
+    .replace(". ", "").replace(".", "").uppercase(ES)
+private fun clockText(c: Calendar) = SimpleDateFormat("h:mm", ES).format(c.time)
 
+/** El nombre de la app enfocada, grande, directo sobre la obra. */
 @Composable
-private fun TopBar(state: HomeState, sounds: Sounds, launch: (Intent) -> Unit, modifier: Modifier) {
-    Row(
-        modifier.fillMaxWidth().padding(start = 120.dp, end = 120.dp, top = 56.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Txt(timeText(state.now), 76, FontWeight.Bold, spacing = (-0.025).em, shadow = true)
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                Txt(dateText(state.now), 24, FontWeight.Medium, Color.White.copy(alpha = 0.85f), shadow = true)
-                state.weather?.let { w ->
-                    Txt("·", 24, color = Color.White.copy(alpha = 0.5f))
-                    val ico = when {
-                        w.isRain -> Ico.RAIN
-                        w.isClear -> if (w.isDay) Ico.SUN else Ico.MOON
-                        else -> Ico.CLOUD
-                    }
-                    Icon(ico, Color.White.copy(alpha = 0.85f), 26.dp)
-                    Txt("${w.temp}° ${Config.CITY}", 24, FontWeight.Medium, Color.White.copy(alpha = 0.85f), shadow = true)
-                }
-            }
-        }
-        Spacer(Modifier.weight(1f))
-        Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
-            val onMove = { if (state.userDriven()) sounds.move() }
-            PillButton(Ico.SEARCH, onFocusMove = onMove) {
-                sounds.select()
-                launch(Intent(Intent.ACTION_ASSIST).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-            }
-            // Solo las entradas con algo conectado; todas están en el centro de control.
-            state.inputs.filter { it.active }.forEach { input ->
-                PillButton(Ico.HDMI, input.name, onFocusMove = onMove) {
-                    sounds.select()
-                    state.switching = input
-                }
-            }
-            PillButton(Ico.SLIDERS, onFocusMove = onMove) {
-                sounds.select()
-                state.showControl = true
-            }
-        }
-    }
-}
-
-@Composable
-private fun PillButton(
-    icon: Ico,
-    title: String? = null,
-    onFocusMove: () -> Unit,
-    onClick: () -> Unit,
-) {
-    var focused by remember { mutableStateOf(false) }
-    val scale by animateFloatAsState(if (focused) 1.08f else 1f, spring(0.8f, 600f), label = "s")
-    val fill by animateFloatAsState(if (focused) 1f else 0f, tween(160), label = "f")
-    val fg = if (focused) Color(0xFF0D0F14) else Color.White
-    val shape = RoundedCornerShape(36.dp)
-    Glass(
-        Modifier
-            .height(72.dp)
-            .then(if (title == null) Modifier.width(72.dp) else Modifier)
-            .graphicsLayer { scaleX = scale; scaleY = scale }
-            .onFocusChanged {
-                if (it.isFocused && !focused) onFocusMove()
-                focused = it.isFocused
-            }
-            .clickable(remember { MutableInteractionSource() }, null, onClick = onClick),
-        shape,
-    ) {
-        Box(Modifier.matchParentSize().graphicsLayer { alpha = fill }.background(Color.White))
-        Row(
-            Modifier.fillMaxHeight().padding(horizontal = if (title == null) 0.dp else 24.dp)
-                .then(if (title == null) Modifier.fillMaxWidth() else Modifier),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(14.dp, Alignment.CenterHorizontally),
-        ) {
-            Icon(icon, fg, 28.dp)
-            if (title != null) Txt(title, 21, FontWeight.SemiBold, fg)
-        }
-    }
-}
-
-/** El nombre de la app enfocada, sobre una placa de vidrio oscuro con su banner. */
-@Composable
-private fun Hero(state: HomeState, modifier: Modifier) {
-    val app = state.dock.getOrNull(state.focusIndex)
-    val name = app?.label ?: "Más apps"
-    Glass(modifier.animateContentSize(spring(0.9f, 500f)), RoundedCornerShape(40.dp), dim = 0.34f) {
-        Row(
-            Modifier.padding(start = 24.dp, end = 52.dp, top = 24.dp, bottom = 24.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(36.dp),
-        ) {
-            Box(
-                Modifier.size(224.dp, 126.dp).clip(RoundedCornerShape(22.dp)).background(Color.White.copy(alpha = 0.08f)),
-                contentAlignment = Alignment.Center,
-            ) {
-                val banner = app?.banner
-                if (banner != null) {
-                    Image(banner, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
-                } else {
-                    Icon(Ico.GRID, Color.White, 56.dp)
-                }
-            }
-            Txt(name, 100, FontWeight.ExtraBold, spacing = (-0.03).em)
-        }
-    }
+private fun Title(state: HomeState, modifier: Modifier) {
+    val name = state.dock.getOrNull(state.focusIndex)?.label ?: ""
+    Txt(name, 112, FontWeight.ExtraBold, spacing = (-0.035).em, shadow = true, modifier = modifier)
 }
 
 /** Título y autor de la obra: texto pequeño y discreto, sin tarjeta. */
@@ -427,115 +338,167 @@ private fun Hero(state: HomeState, modifier: Modifier) {
 private fun ArtCredit(modifier: Modifier) {
     val b = LocalBackdrop.current
     Column(modifier, horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        Txt(b.art.title, 20, FontWeight.Medium, Color.White.copy(alpha = 0.72f), family = FontFamily.Serif, shadow = true)
-        Txt("${b.art.artist} · ${b.art.year}", 16, color = Color.White.copy(alpha = 0.55f), shadow = true)
+        Txt(b.art.title, 19, FontWeight.Medium, Color.White.copy(alpha = 0.7f), family = FontFamily.Serif, shadow = true)
+        Txt("${b.art.artist} · ${b.art.year}", 15, color = Color.White.copy(alpha = 0.5f), shadow = true)
     }
 }
 
+/** Arriba a la derecha: píldora de hora y clima, y botones circulares. */
+@Composable
+private fun TopRight(state: HomeState, sounds: Sounds, launch: (Intent) -> Unit, modifier: Modifier) {
+    val onMove = { if (state.userDriven()) sounds.move() }
+    Row(modifier, horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
+        Glass(Modifier.height(64.dp), RoundedCornerShape(32.dp)) {
+            Row(
+                Modifier.fillMaxHeight().padding(horizontal = 26.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Txt(timeText(state.now), 26, FontWeight.SemiBold)
+                state.weather?.let { w ->
+                    Box(Modifier.width(1.dp).height(24.dp).background(Color.White.copy(alpha = 0.25f)))
+                    val ico = when {
+                        w.isRain -> Ico.RAIN
+                        w.isClear -> if (w.isDay) Ico.SUN else Ico.MOON
+                        else -> Ico.CLOUD
+                    }
+                    Icon(ico, Color.White.copy(alpha = 0.9f), 26.dp)
+                    Txt("${w.temp}°", 26, FontWeight.Medium, Color.White.copy(alpha = 0.9f))
+                }
+            }
+        }
+        state.inputs.filter { it.active }.forEach { input ->
+            RoundButton(Ico.HDMI, input.name, onMove) { sounds.select(); state.switching = input }
+        }
+        RoundButton(Ico.SEARCH, null, onMove) {
+            sounds.select()
+            launch(Intent(Intent.ACTION_ASSIST).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        }
+        RoundButton(Ico.SLIDERS, null, onMove, selected = state.showControl) {
+            sounds.select()
+            state.showControl = true
+        }
+    }
+}
+
+@Composable
+private fun RoundButton(icon: Ico, title: String?, onFocusMove: () -> Unit, selected: Boolean = false, onClick: () -> Unit) {
+    var focused by remember { mutableStateOf(false) }
+    val scale by animateFloatAsState(if (focused) 1.1f else 1f, spring(0.8f, 600f), label = "s")
+    val lit = focused || selected
+    val fg = if (lit) Color(0xFF0D0F14) else Color.White
+    Glass(
+        Modifier
+            .height(64.dp)
+            .then(if (title == null) Modifier.width(64.dp) else Modifier)
+            .graphicsLayer { scaleX = scale; scaleY = scale }
+            .onFocusChanged {
+                if (it.isFocused && !focused) onFocusMove()
+                focused = it.isFocused
+            }
+            .clickable(remember { MutableInteractionSource() }, null, onClick = onClick),
+        CircleShape.takeIf { title == null } ?: RoundedCornerShape(32.dp),
+    ) {
+        if (lit) Box(Modifier.matchParentSize().background(Color.White))
+        Row(
+            Modifier.fillMaxHeight().then(if (title == null) Modifier.fillMaxWidth() else Modifier.padding(horizontal = 22.dp)),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally),
+        ) {
+            Icon(icon, fg, 26.dp)
+            if (title != null) Txt(title, 21, FontWeight.SemiBold, fg)
+        }
+    }
+}
+
+/** Dock de vidrio oscuro + cuadrícula de todas las apps debajo. */
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
-private fun Dock(state: HomeState, sounds: Sounds, launch: (Intent) -> Unit, modifier: Modifier) {
+private fun Apps(state: HomeState, sounds: Sounds, launch: (Intent) -> Unit, modifier: Modifier) {
     val first = remember { FocusRequester() }
     LaunchedEffect(state.dock.size, state.homeSignal) {
         delay(120)
         runCatching { first.requestFocus() }
         state.focusIndex = 0
+        state.row = 0
     }
-    Glass(
-        modifier.padding(start = 120.dp, end = 120.dp, bottom = 60.dp).fillMaxWidth(),
-        RoundedCornerShape(44.dp),
-    ) {
-        Row(
-            Modifier.padding(start = 32.dp, end = 32.dp, top = 30.dp, bottom = 16.dp).focusRestorer().focusGroup(),
-            horizontalArrangement = Arrangement.spacedBy(32.dp),
+    Box(modifier.fillMaxSize()) {
+        Glass(
+            Modifier.offset(x = SIDE.dp, y = DOCK_Y.dp).width((1920f - 2 * SIDE).dp).height(DOCK_H.dp),
+            RoundedCornerShape(40.dp),
         ) {
-            state.dock.forEachIndexed { i, app ->
-                Tile(
-                    label = app.label,
-                    banner = app.banner,
-                    icon = null,
-                    requester = if (i == 0) first else null,
-                    onFocused = {
+            Row(
+                Modifier.fillMaxSize().padding(horizontal = PAD.dp).focusRestorer().focusGroup(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(GAP.dp),
+            ) {
+                state.dock.forEachIndexed { i, app ->
+                    Tile(app, if (i == 0) first else null, onFocused = {
                         if (state.userDriven()) sounds.move()
                         state.focusIndex = i
-                    },
-                    onClick = { sounds.select(); launch(app.intent) },
-                )
+                        state.row = 0
+                    }) { sounds.select(); launch(app.intent) }
+                }
             }
-            Tile(
-                label = "Más apps",
-                banner = null,
-                icon = Ico.GRID,
-                requester = if (state.dock.isEmpty()) first else null,
-                onFocused = {
-                    if (state.userDriven()) sounds.move()
-                    state.focusIndex = state.dock.size
-                },
-                onClick = { sounds.select(); state.showAll = true },
-            )
+        }
+        state.allApps.chunked(PER_ROW).forEachIndexed { r, rowApps ->
+            Row(
+                Modifier.offset(x = (SIDE + PAD).dp, y = (GRID_TOP + r * ROW_STEP).dp).focusRestorer().focusGroup(),
+                horizontalArrangement = Arrangement.spacedBy(GAP.dp),
+            ) {
+                rowApps.forEach { app ->
+                    Tile(app, null, onFocused = {
+                        if (state.userDriven()) sounds.move()
+                        state.row = r + 1
+                    }) { sounds.select(); launch(app.intent) }
+                }
+            }
         }
     }
 }
 
 @Composable
-private fun Tile(
-    label: String,
+private fun Tile(app: AppEntry, requester: FocusRequester?, onFocused: () -> Unit, onClick: () -> Unit) {
+    TileBase(app.banner, app.label, requester, onFocused, onClick)
+}
+
+@Composable
+private fun TileBase(
     banner: ImageBitmap?,
-    icon: Ico?,
+    label: String,
     requester: FocusRequester?,
     onFocused: () -> Unit,
     onClick: () -> Unit,
-    width: Dp = 203.dp,
-    height: Dp = 120.dp,
-    showLabel: Boolean = false,
 ) {
-    val b = LocalBackdrop.current
     var focused by remember { mutableStateOf(false) }
-    val springy = spring<Float>(dampingRatio = 0.72f, stiffness = 520f)
+    val springy = spring<Float>(dampingRatio = 0.75f, stiffness = 520f)
     val scale by animateFloatAsState(if (focused) 1.1f else 1f, springy, label = "scale")
-    val lift by animateFloatAsState(if (focused) -10f else 0f, springy, label = "lift")
-    val shape = RoundedCornerShape(26.dp)
-
-    Column(
-        Modifier.width(width),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(14.dp),
-    ) {
-        Glass(
-            Modifier
-                .size(width, height)
-                .then(if (requester != null) Modifier.focusRequester(requester) else Modifier)
-                .onFocusChanged {
-                    if (it.isFocused && !focused) onFocused()
-                    focused = it.isFocused
-                }
-                .clickable(remember { MutableInteractionSource() }, null, onClick = onClick)
-                .graphicsLayer {
-                    scaleX = scale
-                    scaleY = scale
-                    translationY = lift * density
-                },
-            shape,
-            backdrop = banner == null,
-        ) {
-            if (banner != null) {
-                Image(
-                    bitmap = banner,
-                    contentDescription = label,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize().padding(6.dp).clip(RoundedCornerShape(20.dp)),
-                )
-            } else if (icon != null) {
-                Icon(icon, Color.White, 46.dp, Modifier.align(Alignment.Center))
+    val shine by animateFloatAsState(if (focused) 1f else 0f, tween(200), label = "shine")
+    val shape = RoundedCornerShape(24.dp)
+    Box(
+        Modifier
+            .size(TILE_W.dp, TILE_H.dp)
+            .then(if (requester != null) Modifier.focusRequester(requester) else Modifier)
+            .onFocusChanged {
+                if (it.isFocused && !focused) onFocused()
+                focused = it.isFocused
             }
-            if (focused) Box(Modifier.matchParentSize().border(3.dp, Color.White, shape))
+            .clickable(remember { MutableInteractionSource() }, null, onClick = onClick)
+            .graphicsLayer { scaleX = scale; scaleY = scale; shadowElevation = 0f }
+            .clip(shape)
+            .background(Color(0xFF1E2129)),
+    ) {
+        if (banner != null) {
+            Image(banner, label, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
         }
-        // Marca de foco: una barra corta del color de la obra bajo el mosaico.
-        Box(
-            Modifier.width(36.dp).height(4.dp).clip(RoundedCornerShape(2.dp))
-                .background(if (focused) b.accent else Color.Transparent),
-        )
-        if (showLabel) Txt(label, 20, FontWeight.Medium, Color.White.copy(alpha = if (focused) 1f else 0.75f))
+        // Brillo superior y borde de luz al enfocar (como el reflejo de los íconos de Apple TV).
+        if (shine > 0f) {
+            Box(
+                Modifier.matchParentSize().graphicsLayer { alpha = shine }
+                    .background(Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.18f), Color.Transparent), endY = 160f))
+                    .border(2.dp, Color.White.copy(alpha = 0.55f), shape),
+            )
+        }
     }
 }
 
@@ -557,55 +520,12 @@ private fun GalleryOverlay(state: HomeState) {
                 Txt("${b.art.artist} · ${b.art.year}", 19, color = Color.White.copy(alpha = 0.8f), shadow = true)
             }
             Spacer(Modifier.weight(1f))
-            Txt(timeText(state.now), 64, FontWeight.Light, spacing = (-0.02).em, shadow = true)
+            Txt(clockText(state.now), 64, FontWeight.Light, spacing = (-0.02).em, shadow = true)
         }
     }
 }
 
-@OptIn(ExperimentalComposeUiApi::class)
-@Composable
-private fun AllAppsOverlay(state: HomeState, sounds: Sounds, launch: (Intent) -> Unit) {
-    val first = remember { FocusRequester() }
-    LaunchedEffect(state.allApps.size) {
-        if (state.allApps.isNotEmpty()) {
-            delay(80)
-            runCatching { first.requestFocus() }
-        }
-    }
-    Box(Modifier.fillMaxSize().background(Color(0x73000000))) {
-        Glass(Modifier.fillMaxSize().padding(80.dp), RoundedCornerShape(48.dp), dim = 0.3f) {
-            Column(Modifier.padding(start = 56.dp, end = 56.dp, top = 44.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                Txt("Apps", 44, FontWeight.Bold, spacing = (-0.02).em)
-                if (state.allApps.isNotEmpty()) {
-                    LazyVerticalGrid(
-                        columns = GridCells.Fixed(5),
-                        horizontalArrangement = Arrangement.spacedBy(32.dp),
-                        verticalArrangement = Arrangement.spacedBy(18.dp),
-                        contentPadding = PaddingValues(top = 22.dp, bottom = 40.dp, start = 16.dp, end = 16.dp),
-                        modifier = Modifier.fillMaxSize()
-                            .focusProperties { exit = { FocusRequester.Cancel } }
-                            .focusGroup(),
-                    ) {
-                        itemsIndexed(state.allApps, key = { _, a -> a.pkg }) { i, app ->
-                            Tile(
-                                label = app.label,
-                                banner = app.banner,
-                                icon = null,
-                                requester = if (i == 0) first else null,
-                                onFocused = { if (state.userDriven()) sounds.move() },
-                                onClick = { sounds.select(); state.showAll = false; launch(app.intent) },
-                                width = 270.dp,
-                                height = 152.dp,
-                                showLabel = true,
-                            )
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
+/** Centro de control: popover de vidrio oscuro con mosaicos, anclado arriba a la derecha. */
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
 private fun ControlCenter(state: HomeState, sounds: Sounds, prefs: Prefs, launch: (Intent) -> Unit) {
@@ -626,102 +546,71 @@ private fun ControlCenter(state: HomeState, sounds: Sounds, prefs: Prefs, launch
         sounds.move()
     }
 
-    Box(Modifier.fillMaxSize().background(Color(0x59000000))) {
+    val nightLabel = mapOf("auto" to "Automático", "on" to "Siempre", "off" to "Apagado")
+    val nightNext = mapOf("auto" to "on", "on" to "off", "off" to "auto")
+    val soundLabel = mapOf("off" to "Sin sonido", "seda" to "Seda", "aire" to "Aire", "cristal" to "Cristal")
+    val soundNext = mapOf("off" to "seda", "seda" to "aire", "aire" to "cristal", "cristal" to "off")
+
+    Box(Modifier.fillMaxSize().background(Color(0x40000000))) {
         Glass(
-            Modifier.align(Alignment.CenterEnd).padding(top = 40.dp, end = 40.dp, bottom = 40.dp).width(620.dp).fillMaxHeight()
+            Modifier.align(Alignment.TopEnd).padding(top = 140.dp, end = 96.dp).width(560.dp)
                 .focusProperties { exit = { FocusRequester.Cancel } }
                 .focusGroup(),
-            RoundedCornerShape(48.dp),
-            dim = 0.32f,
+            RoundedCornerShape(44.dp),
+            dim = 0.55f,
         ) {
-            Column(
-                Modifier.padding(start = 44.dp, end = 44.dp, top = 44.dp, bottom = 40.dp),
-                verticalArrangement = Arrangement.spacedBy(30.dp),
-            ) {
-                Section("Entradas") {
-                    if (state.inputs.isEmpty()) {
-                        Txt("No se encontraron entradas", 20, color = Color.White.copy(alpha = 0.7f))
+            Column(Modifier.padding(22.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                    CcTile(Ico.MOON, "Modo noche", nightLabel[state.nightMode] ?: "", state.nightMode != "off", onMove,
+                        Modifier.weight(1f).focusRequester(first)) {
+                        val n = nightNext[state.nightMode] ?: "auto"
+                        state.nightMode = n
+                        prefs.night = n
+                        sounds.select()
                     }
-                    state.inputs.chunked(2).forEachIndexed { r, row ->
-                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            row.forEachIndexed { c, input ->
-                                Chip(
-                                    input.name, selected = input.active, onFocusMove = onMove,
-                                    modifier = Modifier.weight(1f)
-                                        .then(if (r == 0 && c == 0) Modifier.focusRequester(first) else Modifier),
-                                ) {
-                                    sounds.select()
-                                    state.showControl = false
-                                    state.switching = input
-                                }
-                            }
-                            if (row.size == 1) Spacer(Modifier.weight(1f))
-                        }
-                    }
-                }
-
-                Section("Volumen") {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                        Chip("−", false, onFocusMove = onMove, modifier = Modifier.width(76.dp)
-                            .then(if (state.inputs.isEmpty()) Modifier.focusRequester(first) else Modifier)) {
-                            adjust(AudioManager.ADJUST_LOWER)
-                        }
-                        Box(
-                            Modifier.weight(1f).height(14.dp).clip(RoundedCornerShape(7.dp)).background(Color.White.copy(alpha = 0.16f)),
-                        ) {
-                            Box(
-                                Modifier.fillMaxHeight().fillMaxWidth(vol / maxVol.toFloat())
-                                    .clip(RoundedCornerShape(7.dp)).background(Color.White),
-                            )
-                        }
-                        Chip("+", false, onFocusMove = onMove, modifier = Modifier.width(76.dp)) {
-                            adjust(AudioManager.ADJUST_RAISE)
-                        }
-                    }
-                }
-
-                Section("Modo noche") {
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        listOf("auto" to "Automático", "on" to "Siempre", "off" to "Nunca").forEach { (k, l) ->
-                            Chip(l, state.nightMode == k, onFocusMove = onMove, modifier = Modifier.weight(1f)) {
-                                sounds.select()
-                                state.nightMode = k
-                                prefs.night = k
-                            }
-                        }
-                    }
-                }
-
-                Section("Sonidos") {
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        listOf("seda" to "Seda", "aire" to "Aire", "cristal" to "Cristal", "off" to "Sin").forEach { (k, l) ->
-                            Chip(l, state.soundPalette == k, onFocusMove = onMove, modifier = Modifier.weight(1f)) {
-                                state.soundPalette = k
-                                prefs.sound = k
-                                sounds.palette = k
-                                sounds.select()
-                            }
-                        }
-                    }
-                }
-
-                Spacer(Modifier.weight(1f))
-
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Chip("Galería", false, onFocusMove = onMove, modifier = Modifier.weight(1f)) {
+                    CcTile(Ico.IMAGE, "Galería", "Solo la obra", false, onMove, Modifier.weight(1f)) {
                         state.showControl = false
                         state.gallery = true
                     }
-                    Chip("Bluetooth", false, onFocusMove = onMove, modifier = Modifier.weight(1f)) {
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                    CcTile(Ico.SPEAKER, "Sonidos", soundLabel[state.soundPalette] ?: "", state.soundPalette != "off", onMove,
+                        Modifier.weight(1f)) {
+                        val n = soundNext[state.soundPalette] ?: "off"
+                        state.soundPalette = n
+                        prefs.sound = n
+                        sounds.palette = n
                         sounds.select()
+                    }
+                    CcTile(Ico.BT, "Bluetooth", "Audífonos y controles", false, onMove, Modifier.weight(1f)) {
                         state.showControl = false
                         launch(Intent(Settings.ACTION_BLUETOOTH_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
                     }
-                    Chip("Ajustes", false, onFocusMove = onMove, modifier = Modifier.weight(1f)) {
-                        sounds.select()
-                        state.showControl = false
-                        launch(Intent(Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                }
+                // Volumen
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    CcRound("−", onMove) { adjust(AudioManager.ADJUST_LOWER) }
+                    Box(Modifier.weight(1f).height(12.dp).clip(RoundedCornerShape(6.dp)).background(Color.White.copy(alpha = 0.14f))) {
+                        Box(Modifier.fillMaxHeight().fillMaxWidth(vol / maxVol.toFloat()).clip(RoundedCornerShape(6.dp)).background(Color.White))
                     }
+                    CcRound("+", onMove) { adjust(AudioManager.ADJUST_RAISE) }
+                }
+                // Entradas
+                if (state.inputs.isNotEmpty()) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        state.inputs.forEach { input ->
+                            CcPill(input.name, input.active, onMove, Modifier.weight(1f)) {
+                                sounds.select()
+                                state.showControl = false
+                                state.switching = input
+                            }
+                        }
+                    }
+                }
+                CcPill("Ajustes de la tele", false, onMove, Modifier.fillMaxWidth(), icon = Ico.GEAR) {
+                    sounds.select()
+                    state.showControl = false
+                    launch(Intent(Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
                 }
             }
         }
@@ -729,43 +618,81 @@ private fun ControlCenter(state: HomeState, sounds: Sounds, prefs: Prefs, launch
 }
 
 @Composable
-private fun Section(title: String, content: @Composable () -> Unit) {
-    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        Txt(title, 20, FontWeight.SemiBold, Color.White.copy(alpha = 0.7f))
-        content()
+private fun rememberFocus(onFocusMove: () -> Unit): Pair<Boolean, Modifier> {
+    var focused by remember { mutableStateOf(false) }
+    val scale by animateFloatAsState(if (focused) 1.05f else 1f, spring(0.8f, 600f), label = "s")
+    return focused to Modifier
+        .graphicsLayer { scaleX = scale; scaleY = scale }
+        .onFocusChanged {
+            if (it.isFocused && !focused) onFocusMove()
+            focused = it.isFocused
+        }
+}
+
+/** Mosaico grande del centro de control: ícono en círculo, título y estado. */
+@Composable
+private fun CcTile(
+    icon: Ico, title: String, sub: String, on: Boolean, onFocusMove: () -> Unit, modifier: Modifier, onClick: () -> Unit,
+) {
+    val (focused, fm) = rememberFocus(onFocusMove)
+    val bg = if (focused) Color.White else Color.White.copy(alpha = 0.09f)
+    val fg = if (focused) Color(0xFF0D0F14) else Color.White
+    Row(
+        modifier
+            .height(104.dp)
+            .then(fm)
+            .clip(RoundedCornerShape(30.dp))
+            .background(bg)
+            .clickable(remember { MutableInteractionSource() }, null, onClick = onClick)
+            .padding(horizontal = 18.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
+        Box(
+            Modifier.size(56.dp).clip(CircleShape)
+                .background(if (on) Color(0xFF4C8DF6) else fg.copy(alpha = 0.12f)),
+            contentAlignment = Alignment.Center,
+        ) { Icon(icon, if (on) Color.White else fg, 28.dp) }
+        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Txt(title, 21, FontWeight.SemiBold, fg)
+            Txt(sub, 17, color = fg.copy(alpha = 0.65f))
+        }
     }
 }
 
 @Composable
-private fun Chip(
-    text: String,
-    selected: Boolean,
-    onFocusMove: () -> Unit,
-    modifier: Modifier = Modifier,
-    onClick: () -> Unit,
-) {
-    var focused by remember { mutableStateOf(false) }
-    val scale by animateFloatAsState(if (focused) 1.05f else 1f, spring(0.8f, 600f), label = "s")
-    val bg = when {
-        focused -> Color.White
-        selected -> Color.White.copy(alpha = 0.3f)
-        else -> Color.White.copy(alpha = 0.1f)
-    }
+private fun CcRound(text: String, onFocusMove: () -> Unit, onClick: () -> Unit) {
+    val (focused, fm) = rememberFocus(onFocusMove)
     Box(
-        modifier
-            .height(64.dp)
-            .graphicsLayer { scaleX = scale; scaleY = scale }
-            .clip(RoundedCornerShape(32.dp))
-            .background(bg)
-            .onFocusChanged {
-                if (it.isFocused && !focused) onFocusMove()
-                focused = it.isFocused
-            }
-            .clickable(remember { MutableInteractionSource() }, null, onClick = onClick)
-            .padding(horizontal = 14.dp),
+        Modifier.size(64.dp).then(fm).clip(CircleShape)
+            .background(if (focused) Color.White else Color.White.copy(alpha = 0.09f))
+            .clickable(remember { MutableInteractionSource() }, null, onClick = onClick),
         contentAlignment = Alignment.Center,
+    ) { Txt(text, 30, FontWeight.Medium, if (focused) Color(0xFF0D0F14) else Color.White) }
+}
+
+@Composable
+private fun CcPill(
+    text: String, on: Boolean, onFocusMove: () -> Unit, modifier: Modifier, icon: Ico? = null, onClick: () -> Unit,
+) {
+    val (focused, fm) = rememberFocus(onFocusMove)
+    val fg = if (focused) Color(0xFF0D0F14) else Color.White
+    Row(
+        modifier.height(60.dp).then(fm).clip(RoundedCornerShape(30.dp))
+            .background(
+                when {
+                    focused -> Color.White
+                    on -> Color.White.copy(alpha = 0.22f)
+                    else -> Color.White.copy(alpha = 0.09f)
+                }
+            )
+            .clickable(remember { MutableInteractionSource() }, null, onClick = onClick)
+            .padding(horizontal = 16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterHorizontally),
     ) {
-        Txt(text, 21, FontWeight.SemiBold, if (focused) Color(0xFF0D0F14) else Color.White)
+        if (icon != null) Icon(icon, fg, 24.dp)
+        Txt(text, 19, FontWeight.SemiBold, fg)
     }
 }
 
@@ -774,14 +701,14 @@ private fun InputOverlay(input: InputEntry) {
     val t = rememberInfiniteTransition(label = "bar")
     val x by t.animateFloat(-1f, 2.5f, infiniteRepeatable(tween(1400, easing = LinearEasing)), label = "x")
     Box(Modifier.fillMaxSize().background(Color(0x8C000000))) {
-        Glass(Modifier.align(Alignment.Center).width(600.dp), RoundedCornerShape(56.dp), dim = 0.3f) {
+        Glass(Modifier.align(Alignment.Center).width(600.dp), RoundedCornerShape(56.dp), dim = 0.55f) {
             Column(
                 Modifier.fillMaxWidth().padding(start = 56.dp, end = 56.dp, top = 60.dp, bottom = 56.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(24.dp),
             ) {
                 Box(
-                    Modifier.size(140.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.14f)),
+                    Modifier.size(140.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.12f)),
                     contentAlignment = Alignment.Center,
                 ) { Icon(Ico.HDMI, Color.White, 76.dp) }
                 Txt(input.name, 52, FontWeight.ExtraBold, spacing = (-0.03).em)

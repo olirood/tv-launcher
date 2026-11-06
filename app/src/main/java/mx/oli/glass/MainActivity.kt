@@ -28,7 +28,7 @@ class MainActivity : ComponentActivity() {
                 when {
                     state.switching != null -> { state.switching = null; sounds.back() }
                     state.showControl -> { state.showControl = false; sounds.back(); state.homeSignal++ }
-                    state.showAll -> { state.showAll = false; sounds.back(); state.homeSignal++ }
+                    state.row > 0 -> { sounds.back(); state.homeSignal++ }
                 }
             }
         })
@@ -47,7 +47,6 @@ class MainActivity : ComponentActivity() {
     /** Botón Home del control mientras ya estamos en el inicio: limpia todo y vuelve al dock. */
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
-        state.showAll = false
         state.showControl = false
         state.gallery = false
         state.switching = null

@@ -92,7 +92,7 @@ fun Glass(
     modifier: Modifier = Modifier,
     shape: Shape = RoundedCornerShape(36.dp),
     strength: Float = 1f,
-    dim: Float = 0.18f,
+    dim: Float = 0.46f,
     /** false: sin obra detrás (para mosaicos que el banner cubre por completo; ahorra trabajo a la GPU). */
     backdrop: Boolean = true,
     content: @Composable BoxScope.() -> Unit,
@@ -108,24 +108,25 @@ fun Glass(
                 .then(if (backdrop) Modifier.onGloballyPositioned { origin = it.positionInRoot() } else Modifier)
                 .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
                 .drawBehind {
-                    if (backdrop) paintArt(b, blurred = true, origin = origin) else drawRect(Color(0x33FFFFFF))
-                    drawRect(Color.Black.copy(alpha = dim))
+                    // Vidrio oscuro: la obra desenfocada, bastante oscurecida, con un leve tinte y un brillo superior sutil.
+                    if (backdrop) paintArt(b, blurred = true, origin = origin) else drawRect(Color(0xFF1A1C21))
+                    drawRect(Color(0xFF0B0C10).copy(alpha = dim))
                     drawRect(
                         Brush.verticalGradient(
-                            listOf(b.tint.copy(alpha = 0.22f * strength), b.tint.copy(alpha = 0.06f * strength))
+                            listOf(b.tint.copy(alpha = 0.10f * strength), b.tint.copy(alpha = 0.02f * strength))
                         )
                     )
                     drawRect(
                         Brush.radialGradient(
-                            listOf(Color.White.copy(alpha = 0.20f * strength), Color.Transparent),
-                            center = Offset(size.width * 0.18f, 0f),
-                            radius = max(size.width, size.height) * 0.75f,
+                            listOf(Color.White.copy(alpha = 0.10f * strength), Color.Transparent),
+                            center = Offset(size.width * 0.2f, 0f),
+                            radius = max(size.width, size.height) * 0.7f,
                         )
                     )
                 }
                 .border(
                     1.dp,
-                    Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.55f), Color.White.copy(alpha = 0.08f))),
+                    Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.24f), Color.White.copy(alpha = 0.04f))),
                     shape,
                 ),
         )

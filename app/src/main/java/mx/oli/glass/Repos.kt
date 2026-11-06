@@ -66,7 +66,8 @@ object AppRepo {
         val banner: Drawable? = ri?.activityInfo?.loadBanner(pm)
             ?: runCatching { pm.getApplicationBanner(pkg) }.getOrNull()
         if (banner != null) {
-            banner.toBitmap(320, 180, Bitmap.Config.ARGB_8888).asImageBitmap()
+            // Un poco más grande que el mosaico enfocado para que se vea nítido.
+            banner.toBitmap(384, 216, Bitmap.Config.ARGB_8888).asImageBitmap()
         } else {
             val icon = ri?.activityInfo?.loadIcon(pm) ?: pm.getApplicationIcon(pkg)
             iconOnCard(icon).asImageBitmap()
@@ -76,10 +77,10 @@ object AppRepo {
     }
 
     private fun iconOnCard(icon: Drawable): Bitmap {
-        val bmp = Bitmap.createBitmap(320, 180, Bitmap.Config.ARGB_8888)
+        val bmp = Bitmap.createBitmap(384, 216, Bitmap.Config.ARGB_8888)
         val c = Canvas(bmp)
-        c.drawColor(0xFF1E2633.toInt())
-        icon.setBounds(100, 30, 220, 150)
+        c.drawColor(0xFF1E2129.toInt())
+        icon.setBounds(124, 40, 260, 176)
         icon.draw(c)
         return bmp
     }

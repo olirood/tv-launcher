@@ -70,6 +70,7 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.graphicsLayer
@@ -228,7 +229,9 @@ private fun Home(state: HomeState, sounds: Sounds, prefs: Prefs, launch: (Intent
     val uiAlpha by animateFloatAsState(if (state.gallery) 0f else 1f, tween(700), label = "ui")
 
     Box(Modifier.fillMaxSize().onSizeChanged { b.screen = it.toSize() }) {
-        Canvas(Modifier.fillMaxSize()) {
+        // Obra + velos + modo noche en una sola capa guardada: se pinta una vez, no en cada cuadro.
+        val night = state.isNight
+        Canvas(Modifier.fillMaxSize().graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }) {
             paintArt(b, blurred = false)
             val veil = 1f - 0.6f * (1f - uiAlpha)
             drawRect(
@@ -241,8 +244,8 @@ private fun Home(state: HomeState, sounds: Sounds, prefs: Prefs, launch: (Intent
                 ),
                 alpha = veil,
             )
+            if (night) drawRect(Color(0x5C080604))
         }
-        if (state.isNight) Box(Modifier.fillMaxSize().background(Color(0x5C080604)))
 
         Box(Modifier.fillMaxSize().graphicsLayer { alpha = uiAlpha }) {
             TopBar(state, sounds, launch, Modifier.align(Alignment.TopStart))

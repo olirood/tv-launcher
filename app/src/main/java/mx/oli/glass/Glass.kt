@@ -22,7 +22,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.unit.IntOffset
@@ -97,31 +99,36 @@ fun Glass(
 ) {
     val b = LocalBackdrop.current
     var origin by remember { mutableStateOf(Offset.Zero) }
-    Box(
-        modifier
-            .then(if (backdrop) Modifier.onGloballyPositioned { origin = it.positionInRoot() } else Modifier)
-            .clip(shape)
-            .drawBehind {
-                if (backdrop) paintArt(b, blurred = true, origin = origin) else drawRect(Color(0x33FFFFFF))
-                drawRect(Color.Black.copy(alpha = dim))
-                drawRect(
-                    Brush.verticalGradient(
-                        listOf(b.tint.copy(alpha = 0.22f * strength), b.tint.copy(alpha = 0.06f * strength))
+    Box(modifier.clip(shape)) {
+        // El fondo del vidrio va en su propia capa fuera de pantalla: la GPU lo pinta una vez
+        // y luego solo reutiliza la textura. En esta tele eso es la diferencia entre ~17 y 60 cuadros.
+        Box(
+            Modifier
+                .matchParentSize()
+                .then(if (backdrop) Modifier.onGloballyPositioned { origin = it.positionInRoot() } else Modifier)
+                .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+                .drawBehind {
+                    if (backdrop) paintArt(b, blurred = true, origin = origin) else drawRect(Color(0x33FFFFFF))
+                    drawRect(Color.Black.copy(alpha = dim))
+                    drawRect(
+                        Brush.verticalGradient(
+                            listOf(b.tint.copy(alpha = 0.22f * strength), b.tint.copy(alpha = 0.06f * strength))
+                        )
                     )
-                )
-                drawRect(
-                    Brush.radialGradient(
-                        listOf(Color.White.copy(alpha = 0.20f * strength), Color.Transparent),
-                        center = Offset(size.width * 0.18f, 0f),
-                        radius = max(size.width, size.height) * 0.75f,
+                    drawRect(
+                        Brush.radialGradient(
+                            listOf(Color.White.copy(alpha = 0.20f * strength), Color.Transparent),
+                            center = Offset(size.width * 0.18f, 0f),
+                            radius = max(size.width, size.height) * 0.75f,
+                        )
                     )
-                )
-            }
-            .border(
-                1.dp,
-                Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.55f), Color.White.copy(alpha = 0.08f))),
-                shape,
-            ),
-        content = content,
-    )
+                }
+                .border(
+                    1.dp,
+                    Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.55f), Color.White.copy(alpha = 0.08f))),
+                    shape,
+                ),
+        )
+        content()
+    }
 }

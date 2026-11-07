@@ -25,6 +25,9 @@ object Config {
     const val SOUND_PALETTE = "off"
     const val SOUND_VOLUME = 0.6f
 
+    /** Cada cuántos minutos cambia la obra dentro de cada momento (0 = una por día). Se cambia en el centro de control. */
+    const val ROTATE_MIN = 20
+
     /** Minutos sin tocar el control para entrar al modo galería. */
     const val GALLERY_IDLE_MS = 3 * 60 * 1000L
 

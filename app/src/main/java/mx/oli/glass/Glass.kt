@@ -8,6 +8,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -40,8 +41,11 @@ import kotlin.math.roundToInt
  */
 @Stable
 class Backdrop(val progress: State<Float>) {
-    var art by mutableStateOf(ArtCatalog.all.first())
+    var art by mutableStateOf(ArtCatalog.PLACEHOLDER)
     var images by mutableStateOf<ArtImages?>(null)
+    /** Obra anterior y avance del fundido (0 → 1) al cambiar de obra. */
+    var prevImages by mutableStateOf<ArtImages?>(null)
+    var fade by mutableFloatStateOf(1f)
     var screen by mutableStateOf(Size(1920f, 1080f))
 
     val tint get() = Color(art.tint)
@@ -50,7 +54,7 @@ class Backdrop(val progress: State<Float>) {
 
 val LocalBackdrop = staticCompositionLocalOf<Backdrop> { error("Backdrop no disponible") }
 
-private fun DrawScope.drawCover(img: ImageBitmap, screen: Size, k: Float, origin: Offset) {
+private fun DrawScope.drawCover(img: ImageBitmap, screen: Size, k: Float, origin: Offset, alpha: Float = 1f) {
     // Sin movimiento la escala es exacta (1:1 cuando la imagen mide lo mismo que la pantalla): máxima nitidez.
     val s = max(screen.width / img.width, screen.height / img.height) * (if (Config.DRIFT) 1.04f + 0.06f * k else 1f)
     val w = img.width * s
@@ -64,26 +68,18 @@ private fun DrawScope.drawCover(img: ImageBitmap, screen: Size, k: Float, origin
         dstOffset = IntOffset(left.roundToInt(), top.roundToInt()),
         dstSize = IntSize(w.roundToInt(), h.roundToInt()),
         filterQuality = FilterQuality.Medium,
+        alpha = alpha,
     )
-}
-
-private fun DrawScope.drawFallback(art: Artwork, screen: Size, origin: Offset) {
-    val brush = Brush.verticalGradient(
-        0f to Color(art.sky1),
-        0.52f to Color(art.sky2),
-        0.524f to Color(art.ground),
-        1f to Color(art.ground2),
-        startY = -origin.y,
-        endY = screen.height - origin.y,
-    )
-    drawRect(brush)
 }
 
 /** Dibuja la obra (nítida o desenfocada) en coordenadas de pantalla, desplazada por [origin]. */
 fun DrawScope.paintArt(b: Backdrop, blurred: Boolean, origin: Offset = Offset.Zero) {
     val k = if (Config.DRIFT) b.progress.value else 0f
+    val fade = b.fade
     val img = if (blurred) b.images?.blur else b.images?.sharp
-    if (img != null) drawCover(img, b.screen, k, origin) else drawFallback(b.art, b.screen, origin)
+    val prev = if (fade < 1f) (if (blurred) b.prevImages?.blur else b.prevImages?.sharp) else null
+    if (prev != null) drawCover(prev, b.screen, k, origin) else if (img == null || fade < 1f) drawRect(Color(b.art.base))
+    if (img != null) drawCover(img, b.screen, k, origin, if (prev != null) fade else 1f)
 }
 
 /** Panel de vidrio: obra desenfocada detrás, tinte de la obra, brillo superior y borde de luz. */

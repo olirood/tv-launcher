@@ -51,6 +51,11 @@ class Prefs(ctx: Context) {
         get() = sp.getString("night", "auto") ?: "auto"
         set(v) = sp.edit().putString("night", v).apply()
 
+    /** Cada cuántos minutos cambia la obra dentro del momento (0 = una por día). */
+    var rotate: Int
+        get() = sp.getInt("rotate", Config.ROTATE_MIN)
+        set(v) = sp.edit().putInt("rotate", v).apply()
+
     var sound: String
         get() = sp.getString("sound", Config.SOUND_PALETTE) ?: Config.SOUND_PALETTE
         set(v) = sp.edit().putString("sound", v).apply()

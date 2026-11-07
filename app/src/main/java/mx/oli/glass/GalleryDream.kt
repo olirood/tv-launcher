@@ -25,13 +25,13 @@ class GalleryDream : DreamService() {
         isFullscreen = true
         isScreenBright = true
 
-        val art = ArtCatalog.pick(Calendar.getInstance())
+        val art = ArtCatalog.pick(this, Calendar.getInstance(), Prefs(this).rotate)
         val root = FrameLayout(this).apply { setBackgroundColor(Color.BLACK) }
 
         val image = ImageView(this).apply {
             scaleType = ImageView.ScaleType.CENTER_CROP
             ArtLoader.decodeBitmap(this@GalleryDream, art)?.let { setImageBitmap(it) }
-                ?: setBackgroundColor(art.ground2.toInt())
+                ?: setBackgroundColor(art.base.toInt())
         }
         root.addView(image, FrameLayout.LayoutParams(-1, -1))
 

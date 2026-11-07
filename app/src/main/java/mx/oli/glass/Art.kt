@@ -5,6 +5,7 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
+import org.json.JSONArray
 import java.util.Calendar
 
 enum class Moment(val label: String, val seal: String) {
@@ -20,69 +21,70 @@ enum class Moment(val label: String, val seal: String) {
             in 17..19 -> ATARDECER
             else -> NOCHE
         }
+
+        /** Hora en que empieza el momento (para contar la rotación desde ahí). */
+        fun startHour(m: Moment) = when (m) {
+            AMANECER -> 5
+            DIA -> 9
+            ATARDECER -> 17
+            NOCHE -> 20
+        }
     }
 }
 
-/**
- * Una estampa. Los colores son la paleta de la obra: se usan para teñir el vidrio,
- * para el acento y como respaldo si la imagen todavía no está en assets/art.
- */
+/** Una estampa. [tint] y [accent] salen de la propia obra (los calcula el script de preparación). */
 data class Artwork(
     val slug: String,
     val moment: Moment,
     val title: String,
     val artist: String,
     val year: String,
-    val series: String,
-    val sky1: Long,
-    val sky2: Long,
-    val ground: Long,
-    val ground2: Long,
     val tint: Long,
     val accent: Long,
+    val base: Long,
 )
 
 object ArtCatalog {
-    private const val S36 = "Treinta y seis vistas del monte Fuji"
-    private const val TOK = "Cincuenta y tres estaciones del Tōkaidō"
-    private const val EDO = "Cien vistas famosas de Edo"
-    private const val HOK = "Katsushika Hokusai"
-    private const val HIR = "Utagawa Hiroshige"
+    val PLACEHOLDER = Artwork("", Moment.NOCHE, "", "", "", 0xFFC8D4E4, 0xFFC9D6EA, 0xFF0B0D11)
 
-    val all = listOf(
-        Artwork("amanecer-1-fuji-rojo", Moment.AMANECER, "Fuji rojo — Viento del sur, cielo despejado", HOK, "c. 1830–1832", S36,
-            0xFF2C6A8A, 0xFFA9CBCF, 0xFF9A3A22, 0xFF5E2416, 0xFFEED6BE, 0xFFF2A37C),
-        Artwork("amanecer-2-isawa", Moment.AMANECER, "Amanecer en Isawa, provincia de Kai", HOK, "c. 1830–1832", S36,
-            0xFF3B6E8C, 0xFFE9D9B8, 0xFF4B6B5A, 0xFF2A3D33, 0xFFEEE2C8, 0xFFF0C08A),
-        Artwork("amanecer-3-nihonbashi", Moment.AMANECER, "Nihonbashi: vista matutina", HIR, "1833–1834", TOK,
-            0xFFC96A3A, 0xFFF1D7B0, 0xFF6B5A45, 0xFF3A2E22, 0xFFF4DEC4, 0xFFF4B07C),
+    @Volatile private var cache: List<Artwork>? = null
 
-        Artwork("dia-1-gran-ola", Moment.DIA, "La gran ola de Kanagawa", HOK, "c. 1830–1832", S36,
-            0xFFCFC2A2, 0xFFE6DCC4, 0xFF24466F, 0xFF132A46, 0xFFE8E2D2, 0xFFA9C8EA),
-        Artwork("dia-2-kajikazawa", Moment.DIA, "Kajikazawa, provincia de Kai", HOK, "c. 1830–1832", S36,
-            0xFFE6DCC2, 0xFFD9CFB5, 0xFF2B4F7A, 0xFF15304F, 0xFFE6E2D4, 0xFF9FC2E8),
-        Artwork("dia-3-ejiri", Moment.DIA, "Ejiri, provincia de Suruga", HOK, "c. 1830–1832", S36,
-            0xFFB7CFD8, 0xFFE7E1CF, 0xFF8C9A6A, 0xFF4F5B3B, 0xFFE4E6D4, 0xFFC6D79A),
+    /** Lee assets/art/catalog.json (lo genera el script que prepara las imágenes). */
+    fun all(ctx: Context): List<Artwork> = cache ?: synchronized(this) {
+        cache ?: runCatching {
+            val text = ctx.assets.open("art/catalog.json").bufferedReader().use { it.readText() }
+            val arr = JSONArray(text)
+            (0 until arr.length()).map { i ->
+                val o = arr.getJSONObject(i)
+                Artwork(
+                    slug = o.getString("slug"),
+                    moment = Moment.valueOf(o.getString("moment")),
+                    title = o.getString("title"),
+                    artist = o.getString("artist"),
+                    year = o.getString("year"),
+                    tint = java.lang.Long.parseLong(o.getString("tint"), 16),
+                    accent = java.lang.Long.parseLong(o.getString("accent"), 16),
+                    base = java.lang.Long.parseLong(o.getString("base"), 16),
+                )
+            }
+        }.getOrDefault(emptyList()).also { cache = it }
+    }
 
-        // "Jardín de ciruelos en Kameido" queda fuera hasta conseguir la imagen.
-        Artwork("atardecer-2-seta", Moment.ATARDECER, "Atardecer en Seta", HIR, "c. 1834", "Ocho vistas de Ōmi",
-            0xFFD9653B, 0xFFF2C38A, 0xFF355F7A, 0xFF1D3446, 0xFFF8DCC4, 0xFFF7B47E),
-        Artwork("atardecer-3-ohashi", Moment.ATARDECER, "Aguacero sobre el puente Ōhashi y Atake", HIR, "1857", EDO,
-            0xFF2B3440, 0xFF7F8B93, 0xFF3F6A8A, 0xFF21394C, 0xFFD2DAE2, 0xFFB7C9DA),
-
-        Artwork("noche-1-kanbara", Moment.NOCHE, "Kanbara: nieve nocturna", HIR, "1833–1834", TOK,
-            0xFF101318, 0xFF363E4A, 0xFFBFC4C8, 0xFF8E959C, 0xFFC8D4E4, 0xFFC9D6EA),
-        Artwork("noche-2-ryogoku", Moment.NOCHE, "Fuegos artificiales en Ryōgoku", HIR, "1858", EDO,
-            0xFF0B1220, 0xFF22324A, 0xFF1A2A3C, 0xFF0C1622, 0xFFC8D2E6, 0xFFF2D27A),
-        Artwork("noche-3-oji", Moment.NOCHE, "Zorros de fuego en Ōji, víspera de Año Nuevo", HIR, "1857", EDO,
-            0xFF0E1626, 0xFF2B3A55, 0xFF3D4A3A, 0xFF1F261D, 0xFFCED4E2, 0xFFF0D9A0),
-    )
-
-    /** La obra de hoy para el momento actual: rota una vez al día dentro de cada momento. */
-    fun pick(now: Calendar): Artwork {
+    /**
+     * La obra que toca ahora. Dentro de cada momento rota cada [rotateMin] minutos
+     * (0 = una por día), arrancando en un punto distinto cada día. [skip] adelanta obras a mano.
+     */
+    fun pick(ctx: Context, now: Calendar, rotateMin: Int, skip: Int = 0): Artwork {
         val moment = Moment.forHour(now.get(Calendar.HOUR_OF_DAY))
-        val pool = all.filter { it.moment == moment }
-        return pool[now.get(Calendar.DAY_OF_YEAR) % pool.size]
+        val pool = all(ctx).filter { it.moment == moment }.ifEmpty { all(ctx) }
+        if (pool.isEmpty()) return PLACEHOLDER
+        val day = now.get(Calendar.DAY_OF_YEAR)
+        val slot = if (rotateMin <= 0) 0 else {
+            val minutes = now.get(Calendar.HOUR_OF_DAY) * 60 + now.get(Calendar.MINUTE)
+            val since = (minutes - Moment.startHour(moment) * 60 + 24 * 60) % (24 * 60)
+            since / rotateMin
+        }
+        return pool[Math.floorMod(day * 5 + slot + skip, pool.size)]
     }
 }
 
@@ -91,17 +93,18 @@ class ArtImages(val sharp: ImageBitmap?, val blur: ImageBitmap?)
 object ArtLoader {
     /**
      * Carga la obra y su versión desenfocada desde assets/art.
-     * Android 11 no tiene desenfoque en tiempo real, así que el vidrio usa esta versión
-     * pre-desenfocada (o una reducida al vuelo si no existe).
+     * Android 11 no tiene desenfoque en tiempo real, así que el vidrio usa esta versión pre-desenfocada.
      */
     fun load(ctx: Context, art: Artwork): ArtImages {
+        if (art.slug.isEmpty()) return ArtImages(null, null)
         val sharp = decode(ctx, "art/${art.slug}.webp", 1920)
         val blur = decode(ctx, "art/${art.slug}_blur.webp", 480)
             ?: sharp?.let { Bitmap.createScaledBitmap(it, (it.width / 24).coerceAtLeast(8), (it.height / 24).coerceAtLeast(8), true) }
         return ArtImages(sharp?.asImageBitmap(), blur?.asImageBitmap())
     }
 
-    fun decodeBitmap(ctx: Context, art: Artwork): Bitmap? = decode(ctx, "art/${art.slug}.webp", 1920)
+    fun decodeBitmap(ctx: Context, art: Artwork): Bitmap? =
+        if (art.slug.isEmpty()) null else decode(ctx, "art/${art.slug}.webp", 1920)
 
     private fun decode(ctx: Context, path: String, maxWidth: Int): Bitmap? = try {
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }

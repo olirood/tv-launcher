@@ -1,0 +1,112 @@
+[
+ {
+  "slug": "amanecer-1-fuji-rojo",
+  "moment": "AMANECER",
+  "title": "Fuji rojo — Viento del sur, cielo despejado",
+  "artist": "Katsushika Hokusai",
+  "year": "c. 1830–1832",
+  "tint": "FFE2DAD4",
+  "accent": "FFDCAC9D",
+  "base": "FF141110"
+ },
+ {
+  "slug": "amanecer-2-isawa",
+  "moment": "AMANECER",
+  "title": "Amanecer en Isawa, provincia de Kai",
+  "artist": "Katsushika Hokusai",
+  "year": "c. 1830–1832",
+  "tint": "FFE4DDD2",
+  "accent": "FFEEC78B",
+  "base": "FF15120F"
+ },
+ {
+  "slug": "amanecer-3-nihonbashi",
+  "moment": "AMANECER",
+  "title": "Nihonbashi: vista matutina",
+  "artist": "Utagawa Hiroshige",
+  "year": "1833–1834",
+  "tint": "FFE5DBD1",
+  "accent": "FFE9C090",
+  "base": "FF15120F"
+ },
+ {
+  "slug": "atardecer-2-seta",
+  "moment": "ATARDECER",
+  "title": "Atardecer en Seta",
+  "artist": "Utagawa Hiroshige",
+  "year": "c. 1834",
+  "tint": "FFE8DECF",
+  "accent": "FFEECC8B",
+  "base": "FF17130D"
+ },
+ {
+  "slug": "atardecer-3-ohashi",
+  "moment": "ATARDECER",
+  "title": "Aguacero sobre el puente Ōhashi y Atake",
+  "artist": "Utagawa Hiroshige",
+  "year": "1857",
+  "tint": "FFE1E0D6",
+  "accent": "FFD5BAA5",
+  "base": "FF131311"
+ },
+ {
+  "slug": "dia-1-gran-ola",
+  "moment": "DIA",
+  "title": "La gran ola de Kanagawa",
+  "artist": "Katsushika Hokusai",
+  "year": "c. 1830–1832",
+  "tint": "FFDEE2D5",
+  "accent": "FFEED38B",
+  "base": "FF121310"
+ },
+ {
+  "slug": "dia-2-kajikazawa",
+  "moment": "DIA",
+  "title": "Kajikazawa, provincia de Kai",
+  "artist": "Katsushika Hokusai",
+  "year": "c. 1830–1832",
+  "tint": "FFD5E1DA",
+  "accent": "FFE3C296",
+  "base": "FF111312"
+ },
+ {
+  "slug": "dia-3-ejiri",
+  "moment": "DIA",
+  "title": "Ejiri, provincia de Suruga",
+  "artist": "Katsushika Hokusai",
+  "year": "c. 1830–1832",
+  "tint": "FFE5E1D1",
+  "accent": "FFEEC68B",
+  "base": "FF15140F"
+ },
+ {
+  "slug": "noche-1-kanbara",
+  "moment": "NOCHE",
+  "title": "Kanbara: nieve nocturna",
+  "artist": "Utagawa Hiroshige",
+  "year": "1833–1834",
+  "tint": "FFE8E0CF",
+  "accent": "FFE2C798",
+  "base": "FF16140D"
+ },
+ {
+  "slug": "noche-2-ryogoku",
+  "moment": "NOCHE",
+  "title": "Fuegos artificiales en Ryōgoku",
+  "artist": "Utagawa Hiroshige",
+  "year": "1858",
+  "tint": "FFD7E0DE",
+  "accent": "FFA5C7D4",
+  "base": "FF111212"
+ },
+ {
+  "slug": "noche-3-oji",
+  "moment": "NOCHE",
+  "title": "Zorros de fuego en Ōji, víspera de Año Nuevo",
+  "artist": "Utagawa Hiroshige",
+  "year": "1857",
+  "tint": "FFD7E0D8",
+  "accent": "FFD4B6A5",
+  "base": "FF111212"
+ }
+]

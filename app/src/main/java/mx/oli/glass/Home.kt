@@ -9,6 +9,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
@@ -125,6 +126,9 @@ class HomeState(prefs: Prefs) {
     /** "auto", "on" u "off". */
     var nightMode by mutableStateOf(prefs.night)
     var soundPalette by mutableStateOf(prefs.sound)
+    var rotate by mutableIntStateOf(prefs.rotate)
+    /** Obras adelantadas a mano con "Siguiente obra". */
+    var artSkip by mutableIntStateOf(0)
 
     @Volatile var lastInput = SystemClock.uptimeMillis()
     @Volatile var resumed = false
@@ -184,11 +188,20 @@ private fun Home(state: HomeState, sounds: Sounds, prefs: Prefs, launch: (Intent
         }
     }
 
-    val art = ArtCatalog.pick(state.now)
+    // La obra cambia sola según el momento y la rotación; con fundido suave entre una y otra.
+    val art = ArtCatalog.pick(ctx, state.now, state.rotate, state.artSkip)
     LaunchedEffect(art.slug) {
         val imgs = withContext(Dispatchers.IO) { ArtLoader.load(ctx, art) }
+        val first = b.images == null
+        b.prevImages = b.images
         b.art = art
         b.images = imgs
+        if (!first) {
+            b.fade = 0f
+            animate(0f, 1f, animationSpec = tween(1400, easing = FastOutSlowInEasing)) { v, _ -> b.fade = v }
+        }
+        b.fade = 1f
+        b.prevImages = null
     }
 
     LaunchedEffect(Unit) {
@@ -548,6 +561,9 @@ private fun ControlCenter(state: HomeState, sounds: Sounds, prefs: Prefs, launch
 
     val nightLabel = mapOf("auto" to "Automático", "on" to "Siempre", "off" to "Apagado")
     val nightNext = mapOf("auto" to "on", "on" to "off", "off" to "auto")
+    val b = LocalBackdrop.current
+    val rotateLabel = mapOf(20 to "Cada 20 min", 60 to "Cada hora", 0 to "Una por día")
+    val rotateNext = mapOf(20 to 60, 60 to 0, 0 to 20)
     val soundLabel = mapOf("off" to "Sin sonido", "seda" to "Seda", "aire" to "Aire", "cristal" to "Cristal")
     val soundNext = mapOf("off" to "seda", "seda" to "aire", "aire" to "cristal", "cristal" to "off")
 
@@ -568,7 +584,20 @@ private fun ControlCenter(state: HomeState, sounds: Sounds, prefs: Prefs, launch
                         prefs.night = n
                         sounds.select()
                     }
-                    CcTile(Ico.IMAGE, "Galería", "Solo la obra", false, onMove, Modifier.weight(1f)) {
+                    CcTile(Ico.IMAGE, "Cambio de obra", rotateLabel[state.rotate] ?: "Cada ${state.rotate} min", state.rotate > 0, onMove,
+                        Modifier.weight(1f)) {
+                        val n = rotateNext[state.rotate] ?: Config.ROTATE_MIN
+                        state.rotate = n
+                        prefs.rotate = n
+                        sounds.select()
+                    }
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                    CcTile(Ico.IMAGE, "Siguiente obra", b.art.title, false, onMove, Modifier.weight(1f)) {
+                        state.artSkip++
+                        sounds.select()
+                    }
+                    CcTile(Ico.MOON, "Galería", "Solo la obra", false, onMove, Modifier.weight(1f)) {
                         state.showControl = false
                         state.gallery = true
                     }

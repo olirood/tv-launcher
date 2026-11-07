@@ -30,6 +30,56 @@
   "base": "FF15120F"
  },
  {
+  "slug": "amanecer-4-gotenyama",
+  "moment": "AMANECER",
+  "title": "Gotenyama en Shinagawa, en el Tōkaidō",
+  "artist": "Katsushika Hokusai",
+  "year": "c. 1830–1832",
+  "tint": "FFE3E2D3",
+  "accent": "FFD7C2A3",
+  "base": "FF141410"
+ },
+ {
+  "slug": "amanecer-5-mishima",
+  "moment": "AMANECER",
+  "title": "Niebla matutina en Mishima",
+  "artist": "Utagawa Hiroshige",
+  "year": "c. 1833",
+  "tint": "FFE4DED3",
+  "accent": "FFE8C392",
+  "base": "FF14130F"
+ },
+ {
+  "slug": "amanecer-6-suwa",
+  "moment": "AMANECER",
+  "title": "El lago Suwa, provincia de Shinano",
+  "artist": "Katsushika Hokusai",
+  "year": "c. 1830–1832",
+  "tint": "FFE2E2D5",
+  "accent": "FFEEC58B",
+  "base": "FF131310"
+ },
+ {
+  "slug": "amanecer-7-koishikawa",
+  "moment": "AMANECER",
+  "title": "Mañana después de la nevada en Koishikawa",
+  "artist": "Katsushika Hokusai",
+  "year": "c. 1830–1832",
+  "tint": "FFE2E3D4",
+  "accent": "FFE6C294",
+  "base": "FF141410"
+ },
+ {
+  "slug": "amanecer-8-susaki",
+  "moment": "AMANECER",
+  "title": "Amanecer de Año Nuevo tras la nevada en Susaki",
+  "artist": "Utagawa Hiroshige",
+  "year": "c. 1831",
+  "tint": "FFDEE2D4",
+  "accent": "FFEED18B",
+  "base": "FF131410"
+ },
+ {
   "slug": "atardecer-2-seta",
   "moment": "ATARDECER",
   "title": "Atardecer en Seta",
@@ -48,6 +98,56 @@
   "tint": "FFE1E0D6",
   "accent": "FFD5BAA5",
   "base": "FF131311"
+ },
+ {
+  "slug": "atardecer-4-onmayagawa",
+  "moment": "ATARDECER",
+  "title": "Atardecer sobre el puente Ryōgoku desde Onmayagawa",
+  "artist": "Katsushika Hokusai",
+  "year": "c. 1830–1832",
+  "tint": "FFE3E3D4",
+  "accent": "FFEEC78B",
+  "base": "FF141410"
+ },
+ {
+  "slug": "atardecer-5-mii",
+  "moment": "ATARDECER",
+  "title": "Campana vespertina en el templo Mii",
+  "artist": "Utagawa Hiroshige",
+  "year": "c. 1834–1835",
+  "tint": "FFE6DDD1",
+  "accent": "FFEEC48B",
+  "base": "FF15130E"
+ },
+ {
+  "slug": "atardecer-6-yabase",
+  "moment": "ATARDECER",
+  "title": "Barcas que regresan a Yabase",
+  "artist": "Utagawa Hiroshige",
+  "year": "c. 1834–1835",
+  "tint": "FFE7DED0",
+  "accent": "FFEECB8B",
+  "base": "FF16130E"
+ },
+ {
+  "slug": "atardecer-7-mama",
+  "moment": "ATARDECER",
+  "title": "Arces en Mama",
+  "artist": "Utagawa Hiroshige",
+  "year": "1857",
+  "tint": "FFE1DED6",
+  "accent": "FFD4BFA5",
+  "base": "FF131211"
+ },
+ {
+  "slug": "atardecer-8-asukayama",
+  "moment": "ATARDECER",
+  "title": "Nieve al atardecer en Asukayama",
+  "artist": "Utagawa Hiroshige",
+  "year": "c. 1838",
+  "tint": "FFE7DDD0",
+  "accent": "FFEEC78B",
+  "base": "FF16120E"
  },
  {
   "slug": "dia-1-gran-ola",
@@ -80,6 +180,46 @@
   "base": "FF15140F"
  },
  {
+  "slug": "dia-4-inume",
+  "moment": "DIA",
+  "title": "El paso de Inume, provincia de Kai",
+  "artist": "Katsushika Hokusai",
+  "year": "c. 1830–1832",
+  "tint": "FFE8E1CF",
+  "accent": "FFEEC78B",
+  "base": "FF16140D"
+ },
+ {
+  "slug": "dia-5-hodogaya",
+  "moment": "DIA",
+  "title": "Hodogaya en el Tōkaidō",
+  "artist": "Katsushika Hokusai",
+  "year": "c. 1830–1832",
+  "tint": "FFDEE0D6",
+  "accent": "FFEACA90",
+  "base": "FF121311"
+ },
+ {
+  "slug": "dia-7-kirifuri",
+  "moment": "DIA",
+  "title": "La cascada de Kirifuri en el monte Kurokami",
+  "artist": "Katsushika Hokusai",
+  "year": "c. 1832",
+  "tint": "FFDEE1D5",
+  "accent": "FFD4D0A5",
+  "base": "FF121311"
+ },
+ {
+  "slug": "dia-8-kanaya",
+  "moment": "DIA",
+  "title": "El Fuji visto desde Kanaya, en el Tōkaidō",
+  "artist": "Katsushika Hokusai",
+  "year": "c. 1830–1832",
+  "tint": "FFE0E2D5",
+  "accent": "FFE2C297",
+  "base": "FF131310"
+ },
+ {
   "slug": "noche-1-kanbara",
   "moment": "NOCHE",
   "title": "Kanbara: nieve nocturna",
@@ -108,5 +248,65 @@
   "tint": "FFD7E0D8",
   "accent": "FFD4B6A5",
   "base": "FF111212"
+ },
+ {
+  "slug": "noche-4-karasaki",
+  "moment": "NOCHE",
+  "title": "Lluvia nocturna en Karasaki",
+  "artist": "Utagawa Hiroshige",
+  "year": "c. 1834",
+  "tint": "FFE2DDD4",
+  "accent": "FFE2C198",
+  "base": "FF141210"
+ },
+ {
+  "slug": "noche-5-ishiyama",
+  "moment": "NOCHE",
+  "title": "Luna de otoño en Ishiyama",
+  "artist": "Utagawa Hiroshige",
+  "year": "c. 1834",
+  "tint": "FFE4DCD3",
+  "accent": "FFEEC98B",
+  "base": "FF14120F"
+ },
+ {
+  "slug": "noche-6-ryogoku-luna",
+  "moment": "NOCHE",
+  "title": "Luna del crepúsculo en el puente Ryōgoku",
+  "artist": "Utagawa Hiroshige",
+  "year": "c. 1831",
+  "tint": "FFE2DED5",
+  "accent": "FFEEC18B",
+  "base": "FF131210"
+ },
+ {
+  "slug": "noche-7-asakusa",
+  "moment": "NOCHE",
+  "title": "El templo Kinryūzan en Asakusa",
+  "artist": "Utagawa Hiroshige",
+  "year": "1856",
+  "tint": "FFE6DAD1",
+  "accent": "FFE8C091",
+  "base": "FF15110F"
+ },
+ {
+  "slug": "noche-8-susaki",
+  "moment": "NOCHE",
+  "title": "La llanura de Jūmantsubo en Fukagawa Susaki",
+  "artist": "Utagawa Hiroshige",
+  "year": "1856",
+  "tint": "FFDEE0D6",
+  "accent": "FFD6C4A4",
+  "base": "FF121311"
+ },
+ {
+  "slug": "noche-9-tsuki",
+  "moment": "NOCHE",
+  "title": "El mirador de la luna",
+  "artist": "Utagawa Hiroshige",
+  "year": "1857",
+  "tint": "FFE2E2D5",
+  "accent": "FFBDD4A5",
+  "base": "FF131310"
  }
 ]

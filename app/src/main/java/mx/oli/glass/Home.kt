@@ -104,7 +104,6 @@ private const val GAP = 36f
 private const val DOCK_H = TILE_H + 2 * 26f
 private const val DOCK_Y = 1080f - 70f - DOCK_H   // la primera fila de "todas las apps" asoma abajo
 private const val ROW_STEP = TILE_H + 44f
-private const val GRID_TOP = DOCK_Y + DOCK_H + 40f
 private const val PER_ROW = 6
 
 /** Estado de la pantalla de inicio (vive en la Activity, sobrevive recomposiciones). */
@@ -116,7 +115,13 @@ class HomeState(prefs: Prefs) {
     var inputs by mutableStateOf<List<InputEntry>>(emptyList())
     var weather by mutableStateOf<Weather?>(null)
 
-    /** Fila enfocada: 0 = dock, 1.. = filas de todas las apps. */
+    var continueItems by mutableStateOf<List<MediaItem>>(emptyList())
+    var newItems by mutableStateOf<List<MediaItem>>(emptyList())
+    var focusedMedia by mutableStateOf<MediaItem?>(null)
+    var mediaBg by mutableStateOf<ImageBitmap?>(null)
+    var mediaLogo by mutableStateOf<ImageBitmap?>(null)
+
+    /** Fila enfocada (índice en [layout]): 0 = dock. */
     var row by mutableIntStateOf(0)
     var focusIndex by mutableIntStateOf(0)
     var gallery by mutableStateOf(false)
@@ -144,6 +149,32 @@ class HomeState(prefs: Prefs) {
 
     /** ¿El cambio de foco vino de una tecla del control? (para no sonar al arrancar) */
     fun userDriven() = SystemClock.uptimeMillis() - lastInput < 400
+
+    /** Filas bajo el dock: secciones de medios y la cuadrícula de apps, con su posición vertical. */
+    fun layout(): List<RowSpec> {
+        val rows = mutableListOf(RowSpec(RowKind.DOCK, DOCK_Y + 26f, 0, null))
+        var y = DOCK_Y + DOCK_H + 44f
+        var section = 1
+        fun addSection(label: String, kind: RowKind, chunks: List<RowSpec.() -> Unit>) {
+            if (chunks.isEmpty()) return
+            chunks.forEachIndexed { i, fill ->
+                rows += RowSpec(kind, y + 48f + i * ROW_STEP, section, if (i == 0) label else null).apply(fill)
+            }
+            y += 48f + chunks.size * ROW_STEP + 24f
+            section++
+        }
+        if (continueItems.isNotEmpty()) addSection("Continuar viendo", RowKind.MEDIA, listOf({ media = continueItems }))
+        if (newItems.isNotEmpty()) addSection("Nuevo en tus apps", RowKind.MEDIA, listOf({ media = newItems }))
+        addSection("Apps", RowKind.APPS, allApps.chunked(PER_ROW).map { c -> { apps = c } })
+        return rows
+    }
+}
+
+enum class RowKind { DOCK, MEDIA, APPS }
+
+class RowSpec(val kind: RowKind, val tileY: Float, val section: Int, val label: String?) {
+    var media: List<MediaItem> = emptyList()
+    var apps: List<AppEntry> = emptyList()
 }
 
 private val ES = Locale("es", "MX")
@@ -214,6 +245,24 @@ private fun Home(state: HomeState, sounds: Sounds, prefs: Prefs, launch: (Intent
         state.inputs = withContext(Dispatchers.IO) { InputRepo.load(ctx) }
     }
 
+    // Continuar viendo (cada vez que vuelves al inicio) y novedades de TMDB (caché de 6 h).
+    LaunchedEffect(state.dock.size, state.allApps.size, state.resumed) {
+        if (!state.resumed || state.dock.isEmpty()) return@LaunchedEffect
+        val labels = (state.dock + state.allApps).associate { it.pkg to it.label }
+        state.continueItems = withContext(Dispatchers.IO) { WatchNextRepo.load(ctx, labels) }
+        if (state.newItems.isEmpty()) state.newItems = withContext(Dispatchers.IO) { TmdbRepo.load(ctx, labels) }
+    }
+
+    // Fondo de la película enfocada (con una pausa corta para no cargar mientras pasas rápido).
+    LaunchedEffect(state.focusedMedia?.key) {
+        val m = state.focusedMedia ?: return@LaunchedEffect
+        delay(220)
+        val bg = withContext(Dispatchers.IO) { Net.bitmap(ctx, m.backdropUrl, 1280)?.asImageBitmap() }
+        val logo = withContext(Dispatchers.IO) { Net.bitmap(ctx, m.logoUrl, 600)?.asImageBitmap() }
+        state.mediaBg = bg
+        state.mediaLogo = logo
+    }
+
     LaunchedEffect(Unit) {
         while (true) {
             val w = withContext(Dispatchers.IO) { WeatherRepo.fetch() }
@@ -246,10 +295,22 @@ private fun Home(state: HomeState, sounds: Sounds, prefs: Prefs, launch: (Intent
     }
 
     val uiAlpha by animateFloatAsState(if (state.gallery) 0f else 1f, tween(700), label = "ui")
-    // Desplazamiento vertical: el dock sube y aparece la cuadrícula de todas las apps.
-    val scrollTarget = if (state.row == 0) 0f else -(DOCK_Y - 120f) - (state.row - 3).coerceAtLeast(0) * ROW_STEP
+    // Desplazamiento vertical: la fila enfocada ocupa el lugar del dock; en la cuadrícula de apps sube más.
+    val rows = state.layout()
+    val cur = rows.getOrElse(state.row) { rows[0] }
+    val scrollTarget = when (cur.kind) {
+        RowKind.DOCK -> 0f
+        RowKind.MEDIA -> -(cur.tileY - (DOCK_Y + 26f))
+        RowKind.APPS -> {
+            val first = rows.first { it.section == cur.section }
+            val idx = rows.indexOf(cur) - rows.indexOf(first)
+            -(first.tileY - 200f) - (idx - 3).coerceAtLeast(0) * ROW_STEP
+        }
+    }
     val scroll by animateFloatAsState(scrollTarget, spring(dampingRatio = 0.9f, stiffness = 260f), label = "scroll")
-    val gridDim by animateFloatAsState(if (state.row > 0) 1f else 0f, tween(320), label = "dim")
+    val gridDim by animateFloatAsState(if (cur.kind == RowKind.APPS) 1f else 0f, tween(320), label = "dim")
+    val onMedia = cur.kind == RowKind.MEDIA && state.focusedMedia != null
+    val mediaAlpha by animateFloatAsState(if (onMedia && state.mediaBg != null) 1f else 0f, tween(500), label = "media")
 
     Box(Modifier.fillMaxSize().onSizeChanged { b.screen = it.toSize() }) {
         val night = state.isNight
@@ -271,15 +332,35 @@ private fun Home(state: HomeState, sounds: Sounds, prefs: Prefs, launch: (Intent
             )
             if (night) drawRect(Color(0x5C080604))
         }
+        // Fondo de la película o serie enfocada, sobre la obra.
+        val mbg = state.mediaBg
+        if (mediaAlpha > 0f && mbg != null) {
+            Canvas(Modifier.fillMaxSize().graphicsLayer { alpha = mediaAlpha }) {
+                val sc = maxOf(size.width / mbg.width, size.height / mbg.height)
+                drawImage(
+                    mbg,
+                    dstOffset = androidx.compose.ui.unit.IntOffset(
+                        ((size.width - mbg.width * sc) / 2).toInt(), ((size.height - mbg.height * sc) / 2).toInt()),
+                    dstSize = androidx.compose.ui.unit.IntSize((mbg.width * sc).toInt(), (mbg.height * sc).toInt()),
+                    filterQuality = androidx.compose.ui.graphics.FilterQuality.Medium,
+                )
+                drawRect(Brush.horizontalGradient(0f to Color(0xD905080E), 0.5f to Color(0x4005080E), 0.8f to Color(0x0005080E)))
+                drawRect(Brush.verticalGradient(0.45f to Color(0x0005080E), 1f to Color(0xE605080E)))
+            }
+        }
         // Al bajar a la cuadrícula la obra se oscurece.
         if (gridDim > 0f) Box(Modifier.fillMaxSize().graphicsLayer { alpha = gridDim }.background(Color(0xB3050608)))
 
         Box(Modifier.fillMaxSize().graphicsLayer { alpha = uiAlpha }) {
-            Title(state, Modifier.align(Alignment.TopStart).padding(start = 120.dp, top = 96.dp).graphicsLayer { alpha = 1f - gridDim })
+            if (cur.kind == RowKind.MEDIA) {
+                state.focusedMedia?.let { MediaHero(it, state.mediaLogo, Modifier.align(Alignment.TopStart).padding(start = 120.dp, top = 250.dp)) }
+            } else {
+                Title(state, Modifier.align(Alignment.TopStart).padding(start = 120.dp, top = 96.dp).graphicsLayer { alpha = 1f - gridDim })
+            }
             ArtCredit(Modifier.align(Alignment.TopStart).offset(x = 0.dp, y = (DOCK_Y - 64f).dp).fillMaxWidth()
-                .padding(end = 124.dp).graphicsLayer { alpha = 1f - gridDim })
+                .padding(end = 124.dp).graphicsLayer { alpha = (1f - gridDim) * (1f - mediaAlpha) })
             TopRight(state, sounds, launch, Modifier.align(Alignment.TopEnd).padding(top = 56.dp, end = 96.dp))
-            Apps(state, sounds, launch, Modifier.graphicsLayer { translationY = scroll * density })
+            Apps(state, rows, sounds, launch, Modifier.graphicsLayer { translationY = scroll * density })
         }
 
         AnimatedVisibility(state.gallery, enter = fadeIn(tween(900)), exit = fadeOut(tween(400))) {
@@ -424,55 +505,117 @@ private fun RoundButton(icon: Ico, title: String?, onFocusMove: () -> Unit, sele
     }
 }
 
-/** Dock de vidrio oscuro + cuadrícula de todas las apps debajo. */
+/** Dock de vidrio oscuro y, debajo, "Continuar viendo", "Nuevo en tus apps" y la cuadrícula de apps. */
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
-private fun Apps(state: HomeState, sounds: Sounds, launch: (Intent) -> Unit, modifier: Modifier) {
+private fun Apps(state: HomeState, rows: List<RowSpec>, sounds: Sounds, launch: (Intent) -> Unit, modifier: Modifier) {
     val first = remember { FocusRequester() }
     LaunchedEffect(state.dock.size, state.homeSignal) {
         delay(120)
         runCatching { first.requestFocus() }
         state.focusIndex = 0
         state.row = 0
+        state.focusedMedia = null
     }
+    val cur = rows.getOrElse(state.row) { rows[0] }
     Box(modifier.fillMaxSize()) {
-        Glass(
-            Modifier.offset(x = SIDE.dp, y = DOCK_Y.dp).width((1920f - 2 * SIDE).dp).height(DOCK_H.dp),
-            RoundedCornerShape(40.dp),
-        ) {
-            Row(
-                Modifier.fillMaxSize().padding(horizontal = PAD.dp).focusRestorer().focusGroup(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(GAP.dp),
-            ) {
-                state.dock.forEachIndexed { i, app ->
-                    Tile(app, if (i == 0) first else null, onFocused = {
-                        if (state.userDriven()) sounds.move()
-                        state.focusIndex = i
-                        state.row = 0
-                    }) { sounds.select(); launch(app.intent) }
+        rows.forEachIndexed { r, spec ->
+            // Lo que queda arriba de la fila enfocada se desvanece (en la cuadrícula de apps, toda la sección queda visible).
+            val visible = r >= state.row || (cur.kind == RowKind.APPS && spec.section == cur.section)
+            val a by animateFloatAsState(if (visible) 1f else 0f, tween(260), label = "row$r")
+            val rowMod = Modifier.graphicsLayer { alpha = a }
+            when (spec.kind) {
+                RowKind.DOCK -> Glass(
+                    rowMod.offset(x = SIDE.dp, y = DOCK_Y.dp).width((1920f - 2 * SIDE).dp).height(DOCK_H.dp),
+                    RoundedCornerShape(40.dp),
+                ) {
+                    Row(
+                        Modifier.fillMaxSize().padding(horizontal = PAD.dp).focusRestorer().focusGroup(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(GAP.dp),
+                    ) {
+                        state.dock.forEachIndexed { i, app ->
+                            Tile(app, if (i == 0) first else null, onFocused = {
+                                if (state.userDriven()) sounds.move()
+                                state.focusIndex = i
+                                state.row = 0
+                                state.focusedMedia = null
+                            }) { sounds.select(); launch(app.intent) }
+                        }
+                    }
                 }
-            }
-        }
-        state.allApps.chunked(PER_ROW).forEachIndexed { r, rowApps ->
-            Row(
-                Modifier.offset(x = (SIDE + PAD).dp, y = (GRID_TOP + r * ROW_STEP).dp).focusRestorer().focusGroup(),
-                horizontalArrangement = Arrangement.spacedBy(GAP.dp),
-            ) {
-                rowApps.forEach { app ->
-                    Tile(app, null, onFocused = {
-                        if (state.userDriven()) sounds.move()
-                        state.row = r + 1
-                    }) { sounds.select(); launch(app.intent) }
+                else -> {
+                    spec.label?.let {
+                        Txt(it, 22, FontWeight.SemiBold, Color.White.copy(alpha = 0.72f), shadow = true,
+                            modifier = rowMod.offset(x = (SIDE + PAD).dp, y = (spec.tileY - 44f).dp))
+                    }
+                    Row(
+                        rowMod.offset(x = (SIDE + PAD).dp, y = spec.tileY.dp).focusRestorer().focusGroup(),
+                        horizontalArrangement = Arrangement.spacedBy(GAP.dp),
+                    ) {
+                        if (spec.kind == RowKind.MEDIA) {
+                            // Fila horizontal: muestra las que caben; al avanzar se recorre.
+                            var start by remember(spec.media) { mutableIntStateOf(0) }
+                            spec.media.forEachIndexed { i, m ->
+                                if (i < start || i >= start + PER_ROW) return@forEachIndexed
+                                TileBase(m.card, m.title, null, onFocused = {
+                                    if (state.userDriven()) sounds.move()
+                                    state.row = r
+                                    state.focusedMedia = m
+                                    if (i == start + PER_ROW - 1 && i < spec.media.lastIndex) start++
+                                    if (i == start && start > 0) start--
+                                }, progress = m.progress) {
+                                    sounds.select()
+                                    m.intent?.let(launch)
+                                }
+                            }
+                        } else {
+                            spec.apps.forEach { app ->
+                                Tile(app, null, onFocused = {
+                                    if (state.userDriven()) sounds.move()
+                                    state.row = r
+                                    state.focusedMedia = null
+                                }) { sounds.select(); launch(app.intent) }
+                            }
+                        }
+                    }
                 }
             }
         }
     }
 }
 
+/** Ficha del título enfocado: logo (o nombre), plataforma y sinopsis, directo sobre su imagen. */
+@Composable
+private fun MediaHero(m: MediaItem, logo: ImageBitmap?, modifier: Modifier) {
+    Column(modifier.width(900.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
+        if (logo != null) {
+            Image(
+                logo, m.title,
+                Modifier.height(150.dp).width((150f * logo.width / logo.height).coerceAtMost(760f).dp),
+                contentScale = ContentScale.Fit, alignment = Alignment.CenterStart,
+            )
+        } else {
+            Txt(m.title, 84, FontWeight.ExtraBold, spacing = (-0.03).em, shadow = true)
+        }
+        if (m.meta.isNotEmpty()) Txt(m.meta, 24, FontWeight.SemiBold, Color.White.copy(alpha = 0.85f), shadow = true)
+        if (m.overview.isNotEmpty()) {
+            BasicText(
+                m.overview,
+                maxLines = 3,
+                overflow = TextOverflow.Ellipsis,
+                style = TextStyle(
+                    color = Color.White.copy(alpha = 0.82f), fontSize = 24.sp, lineHeight = 34.sp,
+                    shadow = Shadow(Color(0x80000000), Offset(0f, 2f), 16f),
+                ),
+            )
+        }
+    }
+}
+
 @Composable
 private fun Tile(app: AppEntry, requester: FocusRequester?, onFocused: () -> Unit, onClick: () -> Unit) {
-    TileBase(app.banner, app.label, requester, onFocused, onClick)
+    TileBase(app.banner, app.label, requester, onFocused, onClick = onClick)
 }
 
 @Composable
@@ -481,6 +624,7 @@ private fun TileBase(
     label: String,
     requester: FocusRequester?,
     onFocused: () -> Unit,
+    progress: Float? = null,
     onClick: () -> Unit,
 ) {
     var focused by remember { mutableStateOf(false) }
@@ -503,6 +647,16 @@ private fun TileBase(
     ) {
         if (banner != null) {
             Image(banner, label, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+        } else {
+            Txt(label, 20, FontWeight.SemiBold, modifier = Modifier.align(Alignment.Center).padding(horizontal = 14.dp))
+        }
+        if (progress != null) {
+            Box(
+                Modifier.align(Alignment.BottomCenter).padding(start = 16.dp, end = 16.dp, bottom = 12.dp)
+                    .fillMaxWidth().height(5.dp).clip(RoundedCornerShape(3.dp)).background(Color.White.copy(alpha = 0.3f)),
+            ) {
+                Box(Modifier.fillMaxHeight().fillMaxWidth(progress).background(Color.White))
+            }
         }
         // Brillo superior y borde de luz al enfocar (como el reflejo de los íconos de Apple TV).
         if (shine > 0f) {
